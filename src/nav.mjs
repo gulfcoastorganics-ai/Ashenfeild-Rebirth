@@ -30,7 +30,7 @@ export function chaseGoal(enemy,target,entrances=ENTRANCES){
   const playerInside=target.x>entry.left+1&&target.x<entry.right-1&&target.z<entry.front-1&&target.z>entry.back+.8;
   const enemyOutside=enemy.z>entry.front-.5||enemy.x<entry.left+.5||enemy.x>entry.right-.5;
   if(playerInside&&enemyOutside){
-   if(enemy.z>entry.front+1.4||Math.abs(enemy.x-entry.door)>2.3)
+   if(enemy.z>entry.front+3.5||Math.abs(enemy.x-entry.door)>2.3)
     return {x:entry.door,z:entry.front+2.3};
    return {x:entry.door,z:entry.front-3.2};
   }
