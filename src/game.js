@@ -261,7 +261,7 @@ function updateEnemies(dt){
  if(d<36&&d>1.2&&state.started&&!state.paused){
   const speed=e.speed*dt;const dx=(p.x-e.x)/d,dz=(p.z-e.z)/d;const nx=e.x+dx*speed,nz=e.z+dz*speed;
   if(!blocked(nx,nz,.35)){e.x=nx;e.z=nz;}else if(!blocked(nx,nz+speed,.35)){e.x=nx;e.z=nz+speed;}
-  e.mesh.rotation.y=Math.atan2(-dx,-dz);
+  e.mesh.rotation.y=Math.atan2(dx,-dz);
  }
  if(d<1.55&&e.cd<=0){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
  if(e.type==="spitter"&&d<13&&d>2.4&&e.cd<=0){const orb=sphere(e.x,1.5,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));effects.push({mesh:orb,life:3,total:3,kind:"spit",vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8});e.cd=3.4;}
@@ -283,7 +283,7 @@ function updatePlayer(dt){
  if(moving){
  if(!blocked(state.x+dx,state.z,.35))state.x+=dx;
  if(!blocked(state.x,state.z+dz,.35))state.z+=dz;
- state.angle=Math.atan2(-dx,-dz);
+ state.angle=Math.atan2(dx,-dz);
  }
  if(sprint)state.stamina=clamp(state.stamina-dt*18,0,100);else state.stamina=clamp(state.stamina+dt*13,0,100);
  state.thirst=clamp(state.thirst-dt*.026,0,100);state.hunger=clamp(state.hunger-dt*.012,0,100);
