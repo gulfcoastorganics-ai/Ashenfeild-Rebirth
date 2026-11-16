@@ -1,4 +1,5 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
+import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,restoreCheckpoint} from "./nav.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -48,7 +49,7 @@ const keys={},touch={x:0,y:0,sprint:false};
 let cameraYaw=Math.PI,cameraPitch=.56,lastPointer=null,activeDialog=false;
 const solidMeshes=[];
 const cameraRay=new THREE.Raycaster();
-const entrances=[{left:-61.5,right:-36.5,back:-37.5,front:-14.5,door:-47},{left:-24,right:2,back:-38,front:-14,door:-11},{left:29.5,right:60.5,back:-39,front:-13,door:44}];
+
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
@@ -285,34 +286,15 @@ function updateEnemies(dt){
  }
 }
 function animateLimbs(char,amount){const limbs=char.userData.limbs;if(!limbs)return;limbs[0].rotation.x=amount*.48;limbs[1].rotation.x=-amount*.65;limbs[2].rotation.x=-amount*.48;limbs[3].rotation.x=amount*.65;}
-function blocked(x,z,r=.3){if(x< -74+r||x>74-r||z< -55+r||z>44-r)return true;for(const o of obstacles){if(x+r>o.x-o.w/2&&x-r<o.x+o.w/2&&z+r>o.z-o.d/2&&z-r<o.z+o.d/2)return true;}return false;}
+function blocked(x,z,r=.3){return isBlocked2D(x,z,r,obstacles);}
 
-function lineBlocked(x1,z1,x2,z2,r=.1){
- const length=Math.hypot(x2-x1,z2-z1),steps=Math.max(1,Math.ceil(length/.45));
- for(let i=2;i<steps-1;i++){
-  const t=i/steps;
-  if(blocked(x1+(x2-x1)*t,z1+(z2-z1)*t,r))return true;
- }
- return false;
-}
+function lineBlocked(x1,z1,x2,z2,r=.1){return hasCover(x1,z1,x2,z2,r,obstacles);}
 function aimDirection(){
  state.angle=cameraYaw;
  playerVisual.rotation.y=state.angle;
  return V(-Math.sin(state.angle),0,-Math.cos(state.angle));
 }
-function chaseGoal(enemy,target){
- for(const entry of entrances){
-  const playerInside=target.x>entry.left+1&&target.x<entry.right-1&&target.z<entry.front-1&&target.z>entry.back+.8;
-  const enemyOutside=enemy.z>entry.front-.5||enemy.x<entry.left+.5||enemy.x>entry.right-.5;
-  if(playerInside&&enemyOutside){
-   // Outside approach goes to the public entrance, not through a solid facade.
-   if(enemy.z>entry.front+1.4||Math.abs(enemy.x-entry.door)>2.3)return {x:entry.door,z:entry.front+2.3};
-   return {x:entry.door,z:entry.front-3.2};
-  }
- }
- return target;
-}
-
+function chaseGoal(enemy,target){return chooseChaseGoal(enemy,target);}
 function updatePlayer(dt){
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
  let mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
@@ -379,11 +361,19 @@ function updateCamera(dt){
  camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
 }
 function saveGame(){try{localStorage.setItem("ashfordRebirthV01",JSON.stringify({stage:state.stage,x:state.x,z:state.z,health:state.health,stamina:state.stamina,thirst:state.thirst,hunger:state.hunger,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,inventory:state.inventory,kills:state.kills,waveKills:state.waveKills}));}catch(e){}}
-function loadGame(){try{const raw=localStorage.getItem("ashfordRebirthV01");if(!raw)return;const s=JSON.parse(raw);for(const key of ["stage","x","z","health","stamina","thirst","hunger","ammo","hasGun","supplies","kills"]){if(s[key]!==undefined)state[key]=s[key];}
- if(s.inventory)state.inventory=s.inventory;
- if(state.stage===7){startWave();state.waveKills=clamp(s.waveKills||0,0,3);}
- // A saved post-defense checkpoint must not restart the defense.
- toast("LOCAL CHECKPOINT RESTORED");}catch(e){}}
+function loadGame(){
+ try{
+  const raw=localStorage.getItem("ashfordRebirthV01");if(!raw)return;
+  Object.assign(state,restoreCheckpoint(JSON.parse(raw),state));
+  if(blocked(state.x,state.z,.35)){
+   const safe=state.stage>=6?{x:44,z:-20}:state.stage>=2&&state.stage<=3?{x:-11,z:-23}:{x:-48,z:-24};
+   state.x=safe.x;state.z=safe.z;
+  }
+  if(state.stage===7){startWave();state.waveKills=clamp(JSON.parse(raw).waveKills||0,0,3);}
+  playerVisual.position.set(state.x,0,state.z);
+  toast("LOCAL CHECKPOINT RESTORED");
+ }catch(e){console.warn("Checkpoint ignored:",e);}
+}
 function inventory(){
  $("inventory-items").innerHTML="";
  const items=[["CROWBAR","🛠️",1,null],["WATER","💧",state.inventory.water,"water"],["CANNED FOOD","🥫",state.inventory.food,"food"],["BANDAGE","🩹",state.inventory.bandage,"bandage"],["PISTOL","🔫",state.hasGun?1:0,null],["AMMO","▤",state.ammo,null],["MEDICAL SUPPLIES","▣",state.supplies,null]];
