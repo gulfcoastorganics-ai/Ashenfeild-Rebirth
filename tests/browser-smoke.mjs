@@ -68,8 +68,18 @@ try{
  await page.locator("#loader.hide").waitFor({timeout:45000});
  await page.locator("#start-button").click();
  assert(await page.locator("#hud").isVisible(),"Reloaded game failed to start");
- const newDist=Number((await page.locator("#waypoint-distance").innerText()).match(/\d+/)?.[0]||NaN);
- assert(Number.isFinite(newDist)&&newDist<=after+2,"Checkpoint position not restored");
+ // Wait for the first refreshed HUD frame rather than asserting against the "-- m" placeholder.
+ try{
+  await page.waitForFunction(maxDistance=>{
+   const value=document.getElementById("waypoint-distance")?.textContent||"";
+   const match=value.match(/(\d+)\s*m/);
+   return match&&Number(match[1])<=maxDistance+2;
+  },after,{timeout:20000});
+ }catch(e){
+  const actual=await page.locator("#waypoint-distance").innerText();
+  throw new Error("Checkpoint position not restored or HUD stale: expected <= "+(after+2)+"m, got '"+actual+"'");
+ }
+ const newDist=Number((await page.locator("#waypoint-distance").innerText()).match(/\d+/)?.[0]);
  report("Local checkpoint on restart","PASS",newDist+"m to waypoint");
  await page.screenshot({path:resolve(root,"artifacts","resumed.png"),animations:"disabled"});
  // A loaded game may emit the expected fallback warning on software graphics; only fail on genuine JS/network failures.
