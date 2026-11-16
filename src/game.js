@@ -478,6 +478,17 @@ function controls(){
  addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);if(state.started&&(matchMedia("(pointer:coarse)").matches||innerWidth<750))$("mobile-controls").hidden=false;});
  addEventListener("beforeunload",()=>{if(state.started&&!state.ended)saveGame();});
 }
+// Test-only control surface: never exposed on GitHub Pages or public production.
+function installLocalQA(){
+ if(location.hostname!=="127.0.0.1"||new URLSearchParams(location.search).get("__qa")!=="1")return;
+ Object.defineProperty(window,"__ashfordQA",{configurable:false,value:Object.freeze({
+  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z};},
+  teleport(x,z){if(!Number.isFinite(x)||!Number.isFinite(z))throw new Error("Invalid QA location");state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);playerVisual.position.set(state.x,0,state.z);},
+  finishWave(){if(state.stage!==7)throw new Error("Clinic assault is not active");
+   for(const enemy of [...enemies].filter(e=>e.ambush&&!e.dead).slice(0,4)){hurtEnemy(enemy,enemy.hp+1);}
+  }
+ })});
+}
 const clock=new THREE.Clock();let fpsFrames=0,fpsLast=0;
 function animate(){
  requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.06);
@@ -493,6 +504,6 @@ function animate(){
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);
  createNPC("mara",-14,-27,Math.PI);createNPC("vale",48,-29,Math.PI);
- spawnAmbient();makeMarker();setMarker();controls();updateCamera(1);animate();
+ spawnAmbient();makeMarker();setMarker();controls();installLocalQA();updateCamera(1);animate();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}
