@@ -4,6 +4,16 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.3 browser QA and frame pacing
+
+The V0.3 branch adds a real Chromium/WebGL smoke test and a scripted nine-objective mission flow check, plus a time-step fix to reduce slow-motion movement on low-end GPUs. It generates screenshot artifacts in GitHub Actions.
+
+- Run the deterministic tests: `npm run check`
+- Run browser tests after `npm install` and `npx playwright install chromium`: `npm run test:browser`
+- Read [BROWSER-QA.md](BROWSER-QA.md) for the exact test scope and the still-unverified manual route and mobile checks.
+
+The game is **not yet published to GitHub Pages**; the expected URL currently returns 404. Configure Pages separately before describing it as a live playable public build.
+
 ## v0.2 audit improvements
 
 The v0.2 audit branch improves the reconstruction without changing the original Sites production game:
