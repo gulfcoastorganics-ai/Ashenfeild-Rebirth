@@ -62,7 +62,7 @@ function label(text,w=9,h=1.9,bg="#121a1c",fg="#e3c18b",size=50){
  ctx.strokeStyle="#a67b51";ctx.lineWidth=9;ctx.strokeRect(11,11,1002,234);
  ctx.fillStyle=fg;ctx.font="bold "+size+"px Georgia, serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(text,512,125,940);
  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
- return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,transparent:true,side:THREE.DoubleSide}));
+ return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,transparent:true,side:THREE.FrontSide}));
 }
 function gritTexture(){
  const c=document.createElement("canvas");c.width=c.height=256;
@@ -84,9 +84,20 @@ function gritTexture(){
 }
 function wall(x,z,w,d,h,material=brick){return box(x,h/2,z,w,h,d,material,true)}
 function floor(x,z,w,d,material){return box(x,.025,z,w,.05,d,material)}
+function interiorFloorTexture(w,d){
+ const c=document.createElement("canvas");c.width=c.height=128;
+ const ctx=c.getContext("2d");ctx.fillStyle="#55534b";ctx.fillRect(0,0,128,128);
+ for(let i=0;i<13;i++){const v=i*10;ctx.strokeStyle="rgba(20,24,23,.24)";
+  ctx.beginPath();ctx.moveTo(v,0);ctx.lineTo(v,128);ctx.moveTo(0,v);ctx.lineTo(128,v);ctx.stroke();}
+ for(let i=0;i<350;i++){ctx.fillStyle=i%3===0?"rgba(179,167,142,.17)":"rgba(19,27,27,.18)";
+  ctx.fillRect(rand(0,128),rand(0,128),rand(.3,2.8),rand(.3,1.5));}
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+ t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(w/8,d/8);return t;
+}
 function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
- floor(cx,cz,w,d,mat(0x4b4b43));
+ const tile=mat(0xffffff);tile.map=interiorFloorTexture(w,d);tile.needsUpdate=true;
+ floor(cx,cz,w,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
  wall(left,cz,.7,d,4.9,color);wall(right,cz,.7,d,4.9,color);
  if(doorX-frontGap/2>left)wall((left+doorX-frontGap/2)/2,frontZ,doorX-frontGap/2-left,.7,4.9,color);
@@ -114,6 +125,9 @@ function makeWorld(){
  // Safehouse
  house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:mat(0x505452)});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
+ const safeLamp=box(-48,4.42,-25,2.5,.17,.52,mat(0xf3d7a3));
+ safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
+ addLight(-48,3.7,-24,0xffd1a0,7,20);
  box(-54,.62,-30,3,1.2,2,dark,true);box(-40,.6,-32,1.8,1.1,1.6,mat(0x6a5844));
  windowPanel(-56,2.45,-14.32,2.9,1.9);
  for(let i=0;i<3;i++)box(-56+i*.8,2.5,-14.1,.1,2.4,.12,mat(0x6a5842));
@@ -140,7 +154,7 @@ function makeWorld(){
   }
  }
  box(-7,.5,-29,1.3,1,1.3,mat(0x6b6049));box(-7,1.03,-29,1.35,.11,1.35,mat(0xa28a5b));
- addLight(-15,4.15,-27,0xffb16d,13,23);
+ addLight(-15,4.15,-27,0xffb16d,9,23);
  addLight(-5,4,-21,0xb77d44,4,15);
  for(let z of [-20,-33]){const fixture=box(-11,4.45,z,3,.18,.4,mat(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
@@ -157,9 +171,9 @@ function makeWorld(){
  for(let j=-1;j<=1;j++)cyl(x+j*.65,1.35,z,.14,.5,mat(0x8a9998));
  }}
  // privacy curtains near medical beds
- for(let x of [36,54]){const curtain=box(x,2.7,-31,.07,2.65,5,mat(0xabb8ac,.95));curtain.material.side=THREE.DoubleSide;}
- for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,mat(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=1.5;}}
- addLight(44,4,-24,0xa0e5f1,9,23);addLight(54,3.8,-32,0xa7def0,6,15);
+ for(let x of [36,54]){const curtain=box(x,2.7,-31,.07,2.65,5,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
+ for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,mat(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
+ addLight(44,4,-24,0xaddde2,6,22);addLight(54,3.8,-32,0xa7def0,4,15);
  const ward=label("WARD B   /   TRIAGE",10,1.1,"#37565d","#e1e6df",48);ward.position.set(46,2.7,-38.52);world.add(ward);
  // Patrol car, street debris and reflective safety cones form a readable landmark.
  makeCar(17,2,0x343b40,true);addLight(17,5,4,0xf0bd78,5,18);lamp(23,-8,true);
