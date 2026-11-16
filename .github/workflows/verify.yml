@@ -1,7 +1,7 @@
 name: Reconstruction prototype checks
 on:
   push:
-    branches: [reconstruction-prototype, reconstruction-v0.2-audit]
+    branches: [reconstruction-prototype, reconstruction-v0.2-audit, reconstruction-v0.3-browser-qa]
   pull_request:
     branches: [reconstruction-prototype]
 permissions:
@@ -9,10 +9,24 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check JavaScript syntax and run deterministic logic tests
+      - name: Install browser test dependency
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium with graphics libraries
+        run: npx playwright install --with-deps chromium
+      - name: JavaScript syntax and deterministic rules
         run: npm run check
+      - name: WebGL opening-route smoke test
+        run: npm run test:browser
+      - name: Attach browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ashford-browser-qa
+          path: artifacts/*.png
+          if-no-files-found: ignore
