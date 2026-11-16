@@ -45,10 +45,13 @@ const stages=[
  {title:"Secure the clinic entrance",desc:"Return to the front doors. You survived the first night.",point:{x:44,z:-15},kind:"arrive",radius:6}
 ];
 const keys={},touch={x:0,y:0,sprint:false};
-let cameraYaw=.18,cameraPitch=.56,lastPointer=null,activeDialog=false;
+let cameraYaw=Math.PI,cameraPitch=.56,lastPointer=null,activeDialog=false;
+const solidMeshes=[];
+const cameraRay=new THREE.Raycaster();
+const entrances=[{left:-61.5,right:-36.5,back:-37.5,front:-14.5,door:-47},{left:-24,right:2,back:-38,front:-14,door:-11},{left:29.5,right:60.5,back:-39,front:-13,door:44}];
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
-function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid)obstacles.push({x,z,w,d});return m}
+function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function cyl(x,y,z,r,depth,material,group=world){const m=mesh(new THREE.CylinderGeometry(r,r,depth,9),material,x,y,z,group);m.castShadow=true;return m}
 function sphere(x,y,z,r,material,group=world){const m=mesh(new THREE.SphereGeometry(r,10,8),material,x,y,z,group);m.castShadow=true;return m}
 function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);return l}
@@ -234,15 +237,17 @@ function victory(){state.ended=true;state.paused=true;$("end-label").textContent
 function gameOver(){state.ended=true;state.paused=true;$("end-label").textContent="SIGNAL LOST";$("end-title").textContent="YOU DID NOT SURVIVE.";$("end-message").textContent="The dead claimed another survivor. Return to the start and try again.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(125,.6,"sawtooth",.08);}
 function takeDamage(amount){if(state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
 function melee(){if(state.attackTime>0||!state.started||state.paused)return;state.attackTime=.56;tone(175,.1,"triangle",.06);
- const p=pos();const target=enemies.filter(e=>!e.dead&&dist(e,p)<2.9).sort((a,b)=>dist(a,p)-dist(b,p))[0];if(target)hurtEnemy(target,55);
- const dir=V(Math.sin(state.angle),0,-Math.cos(state.angle));
+ const p=pos();const facing=aimDirection();const target=enemies.filter(e=>!e.dead&&dist(e,p)<2.9)
+ .filter(e=>V(e.x-p.x,0,e.z-p.z).normalize().dot(facing)>.22&&!lineBlocked(p.x,p.z,e.x,e.z,.11))
+ .sort((a,b)=>dist(a,p)-dist(b,p))[0];if(target)hurtEnemy(target,55);
+ const dir=facing;
  const slash=mesh(new THREE.TorusGeometry(1.15,.045,5,25,Math.PI*.86),new THREE.MeshBasicMaterial({color:0xe9d6b6,transparent:true,opacity:.84}),state.x+dir.x*.8,1.5,state.z+dir.z*.8,world);
  slash.rotation.set(.35,-state.angle,0);effects.push({mesh:slash,life:.24,total:.24,kind:"fade"});}
 function shoot(){if(!state.started||state.paused||state.shootTime>0)return;if(!state.hasGun){toast("FIND A FIREARM FIRST");return;}if(state.ammo<=0){toast("OUT OF AMMO — USE MELEE");tone(180,.05);return;}state.ammo--;state.shootTime=.29;
  tone(65,.25,"sawtooth",.17);tone(340,.06,"triangle",.08);
- const facing=V(Math.sin(state.angle),0,-Math.cos(state.angle));
+ const facing=aimDirection();
  const target=enemies.filter(e=>!e.dead&&dist(pos(),e)<26).map(e=>{const d=V(e.x-state.x,0,e.z-state.z).normalize();return {e,aim:d.dot(facing),range:dist(pos(),e)};})
- .filter(t=>t.aim>.25).sort((a,b)=>b.aim-a.aim||a.range-b.range)[0];
+ .filter(t=>t.aim>.94&&!lineBlocked(state.x,state.z,t.e.x,t.e.z,.15)).sort((a,b)=>b.aim-a.aim||a.range-b.range)[0];
  const src=V(state.x+facing.x*.7,1.75,state.z+facing.z*.7);
  const end=target?V(target.e.x,1.7,target.e.z):src.clone().add(facing.multiplyScalar(24));
  if(target)hurtEnemy(target.e,68);
@@ -258,19 +263,56 @@ function updateEnemies(dt){
  for(let i=enemies.length-1;i>=0;i--){
  const e=enemies[i];if(e.dead){e.death-=dt;e.mesh.rotation.z=Math.min(1.4,e.mesh.rotation.z+dt*2.3);e.mesh.position.y=-Math.max(0,1.7-e.death)*.20;if(e.death<=0){world.remove(e.mesh);enemies.splice(i,1);}continue;}
  e.phase+=dt*(e.type==="runner"?9:5);e.cd-=dt;const d=dist(p,e);
- if(d<36&&d>1.2&&state.started&&!state.paused){
-  const speed=e.speed*dt;const dx=(p.x-e.x)/d,dz=(p.z-e.z)/d;const nx=e.x+dx*speed,nz=e.z+dz*speed;
-  if(!blocked(nx,nz,.35)){e.x=nx;e.z=nz;}else if(!blocked(nx,nz+speed,.35)){e.x=nx;e.z=nz+speed;}
-  e.mesh.rotation.y=Math.atan2(dx,-dz);
+ if(d<38&&d>1.2&&state.started&&!state.paused){
+  const goal=chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
+  const dx=(goal.x-e.x)/gd,dz=(goal.z-e.z)/gd;
+  let nx=e.x+dx*speed,nz=e.z+dz*speed;
+  // Avoid tunneling through buildings and guide attackers through entrances.
+  if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;}
+  else if(!blocked(nx,e.z,.42)){e.x=nx;}
+  else if(!blocked(e.x,nz,.42)){e.z=nz;}
+  else {
+   const side=V(-dz,0,dx);
+   for(const sign of [1,-1]){nx=e.x+side.x*sign*speed;nz=e.z+side.z*sign*speed;
+     if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;break;}}
+  }
+  e.mesh.rotation.y=Math.atan2(-dx,-dz);
  }
- if(d<1.55&&e.cd<=0){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
- if(e.type==="spitter"&&d<13&&d>2.4&&e.cd<=0){const orb=sphere(e.x,1.5,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));effects.push({mesh:orb,life:3,total:3,kind:"spit",vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8});e.cd=3.4;}
+ if(d<1.55&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
+ if(e.type==="spitter"&&d<13&&d>2.4&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){const orb=sphere(e.x,1.5,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));effects.push({mesh:orb,life:3,total:3,kind:"spit",vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8});e.cd=3.4;}
  e.mesh.position.set(e.x,Math.sin(e.phase)*.025,e.z);
  animateLimbs(e.mesh,Math.sin(e.phase)*.56);
  }
 }
 function animateLimbs(char,amount){const limbs=char.userData.limbs;if(!limbs)return;limbs[0].rotation.x=amount*.48;limbs[1].rotation.x=-amount*.65;limbs[2].rotation.x=-amount*.48;limbs[3].rotation.x=amount*.65;}
 function blocked(x,z,r=.3){if(x< -74+r||x>74-r||z< -55+r||z>44-r)return true;for(const o of obstacles){if(x+r>o.x-o.w/2&&x-r<o.x+o.w/2&&z+r>o.z-o.d/2&&z-r<o.z+o.d/2)return true;}return false;}
+
+function lineBlocked(x1,z1,x2,z2,r=.1){
+ const length=Math.hypot(x2-x1,z2-z1),steps=Math.max(1,Math.ceil(length/.45));
+ for(let i=2;i<steps-1;i++){
+  const t=i/steps;
+  if(blocked(x1+(x2-x1)*t,z1+(z2-z1)*t,r))return true;
+ }
+ return false;
+}
+function aimDirection(){
+ state.angle=cameraYaw;
+ playerVisual.rotation.y=state.angle;
+ return V(-Math.sin(state.angle),0,-Math.cos(state.angle));
+}
+function chaseGoal(enemy,target){
+ for(const entry of entrances){
+  const playerInside=target.x>entry.left+1&&target.x<entry.right-1&&target.z<entry.front-1&&target.z>entry.back+.8;
+  const enemyOutside=enemy.z>entry.front-.5||enemy.x<entry.left+.5||enemy.x>entry.right-.5;
+  if(playerInside&&enemyOutside){
+   // Outside approach goes to the public entrance, not through a solid facade.
+   if(enemy.z>entry.front+1.4||Math.abs(enemy.x-entry.door)>2.3)return {x:entry.door,z:entry.front+2.3};
+   return {x:entry.door,z:entry.front-3.2};
+  }
+ }
+ return target;
+}
+
 function updatePlayer(dt){
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
  let mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
@@ -283,7 +325,7 @@ function updatePlayer(dt){
  if(moving){
  if(!blocked(state.x+dx,state.z,.35))state.x+=dx;
  if(!blocked(state.x,state.z+dz,.35))state.z+=dz;
- state.angle=Math.atan2(dx,-dz);
+ state.angle=Math.atan2(-dx,-dz);
  }
  if(sprint)state.stamina=clamp(state.stamina-dt*18,0,100);else state.stamina=clamp(state.stamina+dt*13,0,100);
  state.thirst=clamp(state.thirst-dt*.026,0,100);state.hunger=clamp(state.hunger-dt*.012,0,100);
@@ -296,7 +338,9 @@ function updatePlayer(dt){
 }
 function updateEffects(dt){
  for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;
- if(e.kind==="spit"){e.mesh.position.x+=e.vx*dt;e.mesh.position.z+=e.vz*dt;if(dist({x:e.mesh.position.x,z:e.mesh.position.z},pos())<.8){takeDamage(10);e.life=0;}}
+ if(e.kind==="spit"){const nx=e.mesh.position.x+e.vx*dt,nz=e.mesh.position.z+e.vz*dt;
+  if(blocked(nx,nz,.22)){e.life=0;}else{e.mesh.position.x=nx;e.mesh.position.z=nz;
+    if(dist({x:nx,z:nz},pos())<.8){takeDamage(10);e.life=0;}}}
  if(e.mesh.material&&"opacity"in e.mesh.material)e.mesh.material.opacity=clamp(e.life/e.total,0,1)*.9;
  if(e.life<=0){world.remove(e.mesh);if(e.mesh.geometry)e.mesh.geometry.dispose();effects.splice(i,1);}
  }
@@ -321,18 +365,24 @@ function drawMap(){
  for(const e of enemies){if(e.dead)continue;ctx.fillStyle="#c3614f";ctx.beginPath();ctx.arc(px(e.x),pz(e.z),2,0,Math.PI*2);ctx.fill();}
  const q=stages[state.stage];ctx.strokeStyle="#eac48a";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px(q.point.x),pz(q.point.z),5,0,Math.PI*2);ctx.stroke();
  ctx.fillStyle="#ebdbb6";ctx.beginPath();ctx.arc(px(state.x),pz(state.z),3.4,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle="#ebdbb6";ctx.beginPath();ctx.moveTo(px(state.x),pz(state.z));ctx.lineTo(px(state.x)+Math.sin(state.angle)*9,pz(state.z)-Math.cos(state.angle)*9);ctx.stroke();
+ ctx.strokeStyle="#ebdbb6";ctx.beginPath();ctx.moveTo(px(state.x),pz(state.z));ctx.lineTo(px(state.x)-Math.sin(state.angle)*9,pz(state.z)-Math.cos(state.angle)*9);ctx.stroke();
  ctx.strokeStyle="#778984";ctx.lineWidth=2;ctx.strokeRect(1,1,w-2,h-2);
 }
 function updateCamera(dt){
- const horizontal=Math.cos(cameraPitch)*16, vertical=Math.sin(cameraPitch)*16;
- const p=V(state.x,1.7,state.z);
- const goal=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.7,state.z+Math.cos(cameraYaw)*horizontal);
- camera.position.lerp(goal,1-Math.exp(-dt*7));camera.lookAt(p);
+ const horizontal=Math.cos(cameraPitch)*12.5,vertical=Math.sin(cameraPitch)*12.5;
+ const pivot=V(state.x,1.65,state.z);
+ const desired=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.65,state.z+Math.cos(cameraYaw)*horizontal);
+ const delta=desired.clone().sub(pivot),maxDist=delta.length(),dir=delta.normalize();
+ cameraRay.set(pivot,dir);cameraRay.near=.2;cameraRay.far=maxDist;
+ const hits=cameraRay.intersectObjects(solidMeshes,false);
+ if(hits.length)desired.copy(pivot).addScaledVector(dir,Math.max(1.5,hits[0].distance-.35));
+ camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
 }
-function saveGame(){try{localStorage.setItem("ashfordRebirthV01",JSON.stringify({stage:state.stage,x:state.x,z:state.z,health:state.health,stamina:state.stamina,thirst:state.thirst,hunger:state.hunger,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,inventory:state.inventory,kills:state.kills}));}catch(e){}}
+function saveGame(){try{localStorage.setItem("ashfordRebirthV01",JSON.stringify({stage:state.stage,x:state.x,z:state.z,health:state.health,stamina:state.stamina,thirst:state.thirst,hunger:state.hunger,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,inventory:state.inventory,kills:state.kills,waveKills:state.waveKills}));}catch(e){}}
 function loadGame(){try{const raw=localStorage.getItem("ashfordRebirthV01");if(!raw)return;const s=JSON.parse(raw);for(const key of ["stage","x","z","health","stamina","thirst","hunger","ammo","hasGun","supplies","kills"]){if(s[key]!==undefined)state[key]=s[key];}
- if(s.inventory)state.inventory=s.inventory;if(state.stage>=7){state.stage=7;startWave();}
+ if(s.inventory)state.inventory=s.inventory;
+ if(state.stage===7){startWave();state.waveKills=clamp(s.waveKills||0,0,3);}
+ // A saved post-defense checkpoint must not restart the defense.
  toast("LOCAL CHECKPOINT RESTORED");}catch(e){}}
 function inventory(){
  $("inventory-items").innerHTML="";
