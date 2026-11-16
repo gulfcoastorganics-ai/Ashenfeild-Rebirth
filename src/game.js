@@ -1,4 +1,5 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
+import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,restoreCheckpoint} from "./nav.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -10,20 +11,20 @@ const mat=(color,rough=.88,metal=0)=>new THREE.MeshStandardMaterial({color,rough
 const coal=mat(0x21282a), asphalt=mat(0x292c2d), concrete=mat(0x555b57), dust=mat(0x7a7060), brick=mat(0x5f5551), panel=mat(0x6c726d), glass=mat(0x39595a,.25,.15), dark=mat(0x1b2225);
 const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,emissiveIntensity:.5,roughness:.3});
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x303c40);
-scene.fog=new THREE.FogExp2(0x354348,.0125);
+scene.background=new THREE.Color(0x252e32);
+scene.fog=new THREE.FogExp2(0x2e393c,.013);
 const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,210);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
 renderer.setSize(innerWidth,innerHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.24;
+renderer.toneMappingExposure=1.10;
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 $("game").appendChild(renderer.domElement);
-const hemi=new THREE.HemisphereLight(0x98acb5,0x252219,2.0);scene.add(hemi);
-const moon=new THREE.DirectionalLight(0xddd5c1,2.0);moon.position.set(-21,40,22);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0004;scene.add(moon);
+const hemi=new THREE.HemisphereLight(0x98acb5,0x252219,1.4);scene.add(hemi);
+const moon=new THREE.DirectionalLight(0xddd5c1,1.8);moon.position.set(-21,40,22);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0004;scene.add(moon);
 const world=new THREE.Group();scene.add(world);
 const obstacles=[],enemies=[],effects=[],lamps=[];
 let playerVisual,marker,markerRing;
@@ -34,7 +35,7 @@ const state={
  time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0
 };
 const stages=[
- {title:"Exit the barricaded house",desc:"Make your way outside. The street is quiet—too quiet.",point:{x:-47,z:-11},kind:"arrive",radius:5},
+ {title:"Exit the barricaded house",desc:"Make your way outside. The street is quiet—too quiet.",point:{x:-47,z:-11},kind:"arrive",radius:2.4},
  {title:"Find Last Stop Market",desc:"Search the storefront for survivors and supplies.",point:{x:-11,z:-15},kind:"arrive",radius:5},
  {title:"Speak with Mara",desc:"Find Mara behind the counter inside Last Stop Market.",point:{x:-14,z:-25},kind:"interact",name:"MARA"},
  {title:"Collect the emergency supplies",desc:"The supply crate is in the back aisle. Take what you can carry.",point:{x:-7,z:-29},kind:"interact",name:"SUPPLY CACHE"},
@@ -42,13 +43,17 @@ const stages=[
  {title:"Reach Ashford Clinic",desc:"Follow the road east. Find the clinic entrance.",point:{x:44,z:-15},kind:"arrive",radius:6},
  {title:"Find Dr. Vale",desc:"The last medic is sheltering in the rear ward.",point:{x:48,z:-28},kind:"interact",name:"DR. VALE"},
  {title:"Hold back the infected",desc:"Protect the clinic. Defeat four infected during the assault.",point:{x:45,z:-13},kind:"combat"},
- {title:"Secure the clinic entrance",desc:"Return to the front doors. You survived the first night.",point:{x:44,z:-15},kind:"arrive",radius:6}
+ {title:"Secure the clinic entrance",desc:"Return to the front doors and secure the clinic gate.",point:{x:44,z:-15},kind:"interact",name:"CLINIC GATE"}
 ];
 const keys={},touch={x:0,y:0,sprint:false};
-let cameraYaw=.18,cameraPitch=.56,lastPointer=null,activeDialog=false;
+let cameraYaw=Math.PI,cameraPitch=.56,lastPointer=null,activeDialog=false;
+let qualityMode="auto";
+const solidMeshes=[];
+const cameraRay=new THREE.Raycaster();
+
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
-function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid)obstacles.push({x,z,w,d});return m}
+function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function cyl(x,y,z,r,depth,material,group=world){const m=mesh(new THREE.CylinderGeometry(r,r,depth,9),material,x,y,z,group);m.castShadow=true;return m}
 function sphere(x,y,z,r,material,group=world){const m=mesh(new THREE.SphereGeometry(r,10,8),material,x,y,z,group);m.castShadow=true;return m}
 function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);return l}
@@ -58,6 +63,24 @@ function label(text,w=9,h=1.9,bg="#121a1c",fg="#e3c18b",size=50){
  ctx.fillStyle=fg;ctx.font="bold "+size+"px Georgia, serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(text,512,125,940);
  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
  return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,transparent:true,side:THREE.DoubleSide}));
+}
+function gritTexture(){
+ const c=document.createElement("canvas");c.width=c.height=256;
+ const ctx=c.getContext("2d");ctx.fillStyle="#444749";ctx.fillRect(0,0,256,256);
+ for(let i=0;i<3200;i++){
+  const x=Math.random()*256,y=Math.random()*256,r=Math.random()*1.8+.25;
+  const shade=Math.random()>.52?"rgba(152,145,134,.16)":"rgba(0,0,0,.18)";
+  ctx.fillStyle=shade;ctx.fillRect(x,y,r,r);
+ }
+ for(let i=0;i<10;i++){
+  const x=rand(0,256),y=rand(0,256);
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+rand(-30,30),y+rand(-20,20));
+  ctx.strokeStyle="rgba(13,15,15,.32)";ctx.lineWidth=rand(.25,1.1);ctx.stroke();
+ }
+ const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+ tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(13,2);
+ tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return tex;
 }
 function wall(x,z,w,d,h,material=brick){return box(x,h/2,z,w,h,d,material,true)}
 function floor(x,z,w,d,material){return box(x,.025,z,w,.05,d,material)}
@@ -73,6 +96,8 @@ function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true}){
 }
 function windowPanel(x,y,z,w,h){box(x,y,z,w,h,.1,glass);box(x-w/2,y,z,.13,h+.2,.14,dark);box(x+w/2,y,z,.13,h+.2,.14,dark);box(x,y+h/2,z,w+.1,.13,.14,dark);box(x,y-h/2,z,w+.1,.13,.14,dark);}
 function makeWorld(){
+ // Single reusable 256px procedural roadway texture; detail without external assets.
+ asphalt.map=gritTexture();asphalt.color.set(0xffffff);asphalt.needsUpdate=true;
  floor(0,0,160,140,mat(0x343d36));
  // Asphalt, sidewalk, gutters, and lane paint
  floor(0,0,145,16,asphalt);floor(0,-10,145,4,concrete);floor(0,10,145,4,concrete);
@@ -82,6 +107,10 @@ function makeWorld(){
  for(let i=0;i<155;i++){const x=rand(-69,69),z=rand(-7.6,7.6),len=rand(.24,1.9);
  const crack=box(x,.062,z,len,.012,.025,mat(0x131819));crack.rotation.y=rand(-1.1,1.1);}
  for(let i=0;i<105;i++){const x=rand(-68,68),z=rand(-46,39),size=rand(.09,.44);box(x,.06,z,size,.045,size,mat(i%3===0?0x6e6c5c:0x373d39));}
+ for(let i=0;i<17;i++){const x=rand(-61,64),z=rand(-6.4,6.4);
+  const puddle=mesh(new THREE.CircleGeometry(1,20),mat(0x202d31,.19,.22),x,.066,z);
+  puddle.rotation.x=-Math.PI/2;puddle.scale.set(rand(.25,1.5),rand(.18,.7),1);
+ }
  // Safehouse
  house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:mat(0x505452)});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
@@ -93,6 +122,12 @@ function makeWorld(){
  house({cx:-11,cz:-26,w:26,d:24,frontGap:9,doorX:-11,color:mat(0x60594d)});
  const marketSign=label("LAST STOP MARKET",19,2.2,"#2d3534","#dfaa6d",78);marketSign.position.set(-11,4.35,-13.56);world.add(marketSign);
  windowPanel(-20,2.25,-13.55,4,2.4);windowPanel(-2,2.25,-13.55,4,2.4);
+ // Hand-height scuffs and grime at the storefront, intentionally low-cost decals.
+ const scuffMat=new THREE.MeshStandardMaterial({color:0x312b26,transparent:true,opacity:.42,depthWrite:false,roughness:1});
+ for(let i=0;i<26;i++){const x=rand(-23,-18.1)+(i%2?0:rand(16,21)),y=rand(1.1,3.2);
+  box(x,y,-13.48,rand(.08,.52),rand(.025,.15),.012,scuffMat);
+ }
+ box(-11,3.15,-13.47,9,.07,.05,mat(0x715f4c));
  // counter, cash register, shelves, stock
  box(-15,.82,-29,7,1.65,1.25,mat(0x594734));box(-15,1.7,-29,7,.14,1.35,mat(0x88745c));
  box(-12,1.93,-29,1.1,.45,.85,dark);box(-12,2.16,-29,.9,.09,.48,glass);
@@ -112,6 +147,8 @@ function makeWorld(){
  house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:mat(0x768080)});
  const clinicSign=label("ASHFORD CLINIC",20,2.15,"#253b43","#b8dce0",75);clinicSign.position.set(45,4.4,-12.65);world.add(clinicSign);
  windowPanel(34,2.3,-12.65,4,2.5);windowPanel(56,2.3,-12.65,4,2.5);
+ for(let x of [34,55])box(x,3.66,-12.54,5.5,.20,.09,mat(0x4b6d71));
+ box(44,.12,-12.3,8,.03,.65,mat(0xc1bb9f));
  const redCross=label("+",2.6,2.3,"#e7ded5","#ab3732",140);redCross.position.set(45,6.45,-12.8);world.add(redCross);
  // Clinic wayfinding
  for(let z of [-30,-22]){const strip=box(43,.055,z,15,.014,.15,mat(0x9bafad));}
@@ -124,14 +161,21 @@ function makeWorld(){
  for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,mat(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=1.5;}}
  addLight(44,4,-24,0xa0e5f1,9,23);addLight(54,3.8,-32,0xa7def0,6,15);
  const ward=label("WARD B   /   TRIAGE",10,1.1,"#37565d","#e1e6df",48);ward.position.set(46,2.7,-38.52);world.add(ward);
- // Patrol car in a pool of light
+ // Patrol car, street debris and reflective safety cones form a readable landmark.
  makeCar(17,2,0x343b40,true);addLight(17,5,4,0xf0bd78,5,18);lamp(23,-8,true);
+ for(const [x,z] of [[13,-2],[21,5],[23,1]]){const cone=mesh(new THREE.ConeGeometry(.33,.87,7),mat(0xa8683d),x,.5,z);cone.castShadow=true;
+  cyl(x,.105,z,.42,.15,mat(0xb5ac8a));}
+
  // ambient street furniture
  for(let x of [-56,-27,0,34,65])lamp(x,9,x%2===0);
  for(let i=0;i<19;i++)makeTree(rand(-65,65),Math.random()>.5?rand(16,35):rand(-58,-44));
  for(let i=0;i<20;i++){let x=rand(-67,67),z=rand(11,23);if(i%3===0)z=rand(-48,-42);
  box(x,.35,z,rand(.3,1.5),rand(.4,1.2),rand(.3,1.1),mat([0x5b5b52,0x3d4848,0x796352][i%3]));}
  for(let x of [-65,69])makeCar(x,17,0x675b4e,false);
+ const dustPositions=new Float32Array(240*3);
+ for(let i=0;i<240;i++){dustPositions[i*3]=rand(-65,65);dustPositions[i*3+1]=rand(.4,4.5);dustPositions[i*3+2]=rand(-39,22);}
+ const dustGeom=new THREE.BufferGeometry();dustGeom.setAttribute("position",new THREE.BufferAttribute(dustPositions,3));
+ world.add(new THREE.Points(dustGeom,new THREE.PointsMaterial({color:0xd1bd9c,size:.07,transparent:true,opacity:.34,depthWrite:false})));
 }
 function lamp(x,z,lit){cyl(x,2.7,z,.12,5.4,coal);box(x,5.42,z,.7,.25,1.1,dark);if(lit){addLight(x,5.4,z,0xe9af70,4,14);sphere(x,5.42,z,.24,new THREE.MeshBasicMaterial({color:0xf0bd83}));}}
 function makeCar(x,z,color,police=false){
@@ -226,6 +270,7 @@ function interact(){
  else if(state.stage===3){state.supplies=1;state.inventory.water+=2;state.inventory.food+=2;toast("SUPPLIES RECOVERED + WATER + FOOD");tone(900,.2);advance();}
  else if(state.stage===4){state.hasGun=true;state.weapon="pistol";state.ammo=36;toast("PISTOL RECOVERED · 36 ROUNDS");tone(920,.24);advance();}
  else if(state.stage===6)showDialogue("DR. VALE","You brought supplies. That's more than I expected. Hold the entrance while I stabilize the ward. They're coming from the road—don't let them inside.",()=>{advance();startWave();});
+ else if(state.stage===8)victory();
 }
 function startWave(){state.waveStarted=true;state.waveKills=0;state.waveTimer=0;
  for(const [type,x,z] of [["walker",32,6],["runner",51,6],["brute",61,4],["spitter",27,-3],["walker",56,12],["runner",37,12]])spawnEnemy(type,x,z,true);
@@ -234,15 +279,17 @@ function victory(){state.ended=true;state.paused=true;$("end-label").textContent
 function gameOver(){state.ended=true;state.paused=true;$("end-label").textContent="SIGNAL LOST";$("end-title").textContent="YOU DID NOT SURVIVE.";$("end-message").textContent="The dead claimed another survivor. Return to the start and try again.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(125,.6,"sawtooth",.08);}
 function takeDamage(amount){if(state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
 function melee(){if(state.attackTime>0||!state.started||state.paused)return;state.attackTime=.56;tone(175,.1,"triangle",.06);
- const p=pos();const target=enemies.filter(e=>!e.dead&&dist(e,p)<2.9).sort((a,b)=>dist(a,p)-dist(b,p))[0];if(target)hurtEnemy(target,55);
- const dir=V(Math.sin(state.angle),0,-Math.cos(state.angle));
+ const p=pos();const facing=aimDirection();const target=enemies.filter(e=>!e.dead&&dist(e,p)<2.9)
+ .filter(e=>V(e.x-p.x,0,e.z-p.z).normalize().dot(facing)>.22&&!lineBlocked(p.x,p.z,e.x,e.z,.11))
+ .sort((a,b)=>dist(a,p)-dist(b,p))[0];if(target)hurtEnemy(target,55);
+ const dir=facing;
  const slash=mesh(new THREE.TorusGeometry(1.15,.045,5,25,Math.PI*.86),new THREE.MeshBasicMaterial({color:0xe9d6b6,transparent:true,opacity:.84}),state.x+dir.x*.8,1.5,state.z+dir.z*.8,world);
  slash.rotation.set(.35,-state.angle,0);effects.push({mesh:slash,life:.24,total:.24,kind:"fade"});}
 function shoot(){if(!state.started||state.paused||state.shootTime>0)return;if(!state.hasGun){toast("FIND A FIREARM FIRST");return;}if(state.ammo<=0){toast("OUT OF AMMO — USE MELEE");tone(180,.05);return;}state.ammo--;state.shootTime=.29;
  tone(65,.25,"sawtooth",.17);tone(340,.06,"triangle",.08);
- const facing=V(Math.sin(state.angle),0,-Math.cos(state.angle));
+ const facing=aimDirection();
  const target=enemies.filter(e=>!e.dead&&dist(pos(),e)<26).map(e=>{const d=V(e.x-state.x,0,e.z-state.z).normalize();return {e,aim:d.dot(facing),range:dist(pos(),e)};})
- .filter(t=>t.aim>.25).sort((a,b)=>b.aim-a.aim||a.range-b.range)[0];
+ .filter(t=>t.aim>.94&&!lineBlocked(state.x,state.z,t.e.x,t.e.z,.15)).sort((a,b)=>b.aim-a.aim||a.range-b.range)[0];
  const src=V(state.x+facing.x*.7,1.75,state.z+facing.z*.7);
  const end=target?V(target.e.x,1.7,target.e.z):src.clone().add(facing.multiplyScalar(24));
  if(target)hurtEnemy(target.e,68);
@@ -258,19 +305,40 @@ function updateEnemies(dt){
  for(let i=enemies.length-1;i>=0;i--){
  const e=enemies[i];if(e.dead){e.death-=dt;e.mesh.rotation.z=Math.min(1.4,e.mesh.rotation.z+dt*2.3);e.mesh.position.y=-Math.max(0,1.7-e.death)*.20;if(e.death<=0){world.remove(e.mesh);enemies.splice(i,1);}continue;}
  e.phase+=dt*(e.type==="runner"?9:5);e.cd-=dt;const d=dist(p,e);
- if(d<36&&d>1.2&&state.started&&!state.paused){
-  const speed=e.speed*dt;const dx=(p.x-e.x)/d,dz=(p.z-e.z)/d;const nx=e.x+dx*speed,nz=e.z+dz*speed;
-  if(!blocked(nx,nz,.35)){e.x=nx;e.z=nz;}else if(!blocked(nx,nz+speed,.35)){e.x=nx;e.z=nz+speed;}
-  e.mesh.rotation.y=Math.atan2(dx,-dz);
+ if(d<38&&d>1.2&&state.started&&!state.paused){
+  const goal=chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
+  const dx=(goal.x-e.x)/gd,dz=(goal.z-e.z)/gd;
+  let nx=e.x+dx*speed,nz=e.z+dz*speed;
+  // Avoid tunneling through buildings and guide attackers through entrances.
+  if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;}
+  else if(!blocked(nx,e.z,.42)){e.x=nx;}
+  else if(!blocked(e.x,nz,.42)){e.z=nz;}
+  else {
+   const side=V(-dz,0,dx);
+   for(const sign of [1,-1]){nx=e.x+side.x*sign*speed;nz=e.z+side.z*sign*speed;
+     if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;break;}}
+  }
+  e.mesh.rotation.y=Math.atan2(-dx,-dz);
  }
- if(d<1.55&&e.cd<=0){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
- if(e.type==="spitter"&&d<13&&d>2.4&&e.cd<=0){const orb=sphere(e.x,1.5,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));effects.push({mesh:orb,life:3,total:3,kind:"spit",vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8});e.cd=3.4;}
+ if(d<1.55&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
+ if(e.type==="spitter"&&d<13&&d>2.4&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){const orb=sphere(e.x,1.5,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));effects.push({mesh:orb,life:3,total:3,kind:"spit",vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8});e.cd=3.4;}
  e.mesh.position.set(e.x,Math.sin(e.phase)*.025,e.z);
  animateLimbs(e.mesh,Math.sin(e.phase)*.56);
+ // A visible half-second windup communicates the Spitter's ranged attack.
+ if(e.type==="spitter")e.mesh.userData.torso.rotation.x=e.cd>.01&&e.cd<.68?-(.68-e.cd)*.75:0;
+ if(e.type==="runner")e.mesh.userData.torso.rotation.x=-.30;
  }
 }
 function animateLimbs(char,amount){const limbs=char.userData.limbs;if(!limbs)return;limbs[0].rotation.x=amount*.48;limbs[1].rotation.x=-amount*.65;limbs[2].rotation.x=-amount*.48;limbs[3].rotation.x=amount*.65;}
-function blocked(x,z,r=.3){if(x< -74+r||x>74-r||z< -55+r||z>44-r)return true;for(const o of obstacles){if(x+r>o.x-o.w/2&&x-r<o.x+o.w/2&&z+r>o.z-o.d/2&&z-r<o.z+o.d/2)return true;}return false;}
+function blocked(x,z,r=.3){return isBlocked2D(x,z,r,obstacles);}
+
+function lineBlocked(x1,z1,x2,z2,r=.1){return hasCover(x1,z1,x2,z2,r,obstacles);}
+function aimDirection(){
+ state.angle=cameraYaw;
+ playerVisual.rotation.y=state.angle;
+ return V(-Math.sin(state.angle),0,-Math.cos(state.angle));
+}
+function chaseGoal(enemy,target){return chooseChaseGoal(enemy,target);}
 function updatePlayer(dt){
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
  let mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
@@ -283,7 +351,7 @@ function updatePlayer(dt){
  if(moving){
  if(!blocked(state.x+dx,state.z,.35))state.x+=dx;
  if(!blocked(state.x,state.z+dz,.35))state.z+=dz;
- state.angle=Math.atan2(dx,-dz);
+ state.angle=Math.atan2(-dx,-dz);
  }
  if(sprint)state.stamina=clamp(state.stamina-dt*18,0,100);else state.stamina=clamp(state.stamina+dt*13,0,100);
  state.thirst=clamp(state.thirst-dt*.026,0,100);state.hunger=clamp(state.hunger-dt*.012,0,100);
@@ -296,7 +364,9 @@ function updatePlayer(dt){
 }
 function updateEffects(dt){
  for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;
- if(e.kind==="spit"){e.mesh.position.x+=e.vx*dt;e.mesh.position.z+=e.vz*dt;if(dist({x:e.mesh.position.x,z:e.mesh.position.z},pos())<.8){takeDamage(10);e.life=0;}}
+ if(e.kind==="spit"){const nx=e.mesh.position.x+e.vx*dt,nz=e.mesh.position.z+e.vz*dt;
+  if(blocked(nx,nz,.22)){e.life=0;}else{e.mesh.position.x=nx;e.mesh.position.z=nz;
+    if(dist({x:nx,z:nz},pos())<.8){takeDamage(10);e.life=0;}}}
  if(e.mesh.material&&"opacity"in e.mesh.material)e.mesh.material.opacity=clamp(e.life/e.total,0,1)*.9;
  if(e.life<=0){world.remove(e.mesh);if(e.mesh.geometry)e.mesh.geometry.dispose();effects.splice(i,1);}
  }
@@ -321,19 +391,42 @@ function drawMap(){
  for(const e of enemies){if(e.dead)continue;ctx.fillStyle="#c3614f";ctx.beginPath();ctx.arc(px(e.x),pz(e.z),2,0,Math.PI*2);ctx.fill();}
  const q=stages[state.stage];ctx.strokeStyle="#eac48a";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(px(q.point.x),pz(q.point.z),5,0,Math.PI*2);ctx.stroke();
  ctx.fillStyle="#ebdbb6";ctx.beginPath();ctx.arc(px(state.x),pz(state.z),3.4,0,Math.PI*2);ctx.fill();
- ctx.strokeStyle="#ebdbb6";ctx.beginPath();ctx.moveTo(px(state.x),pz(state.z));ctx.lineTo(px(state.x)+Math.sin(state.angle)*9,pz(state.z)-Math.cos(state.angle)*9);ctx.stroke();
+ ctx.strokeStyle="#ebdbb6";ctx.beginPath();ctx.moveTo(px(state.x),pz(state.z));ctx.lineTo(px(state.x)-Math.sin(state.angle)*9,pz(state.z)-Math.cos(state.angle)*9);ctx.stroke();
  ctx.strokeStyle="#778984";ctx.lineWidth=2;ctx.strokeRect(1,1,w-2,h-2);
 }
 function updateCamera(dt){
- const horizontal=Math.cos(cameraPitch)*16, vertical=Math.sin(cameraPitch)*16;
- const p=V(state.x,1.7,state.z);
- const goal=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.7,state.z+Math.cos(cameraYaw)*horizontal);
- camera.position.lerp(goal,1-Math.exp(-dt*7));camera.lookAt(p);
+ const horizontal=Math.cos(cameraPitch)*12.5,vertical=Math.sin(cameraPitch)*12.5;
+ const pivot=V(state.x,1.65,state.z);
+ const desired=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.65,state.z+Math.cos(cameraYaw)*horizontal);
+ const delta=desired.clone().sub(pivot),maxDist=delta.length(),dir=delta.normalize();
+ cameraRay.set(pivot,dir);cameraRay.near=.2;cameraRay.far=maxDist;
+ const hits=cameraRay.intersectObjects(solidMeshes,false);
+ if(hits.length)desired.copy(pivot).addScaledVector(dir,Math.max(1.5,hits[0].distance-.35));
+ camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
 }
-function saveGame(){try{localStorage.setItem("ashfordRebirthV01",JSON.stringify({stage:state.stage,x:state.x,z:state.z,health:state.health,stamina:state.stamina,thirst:state.thirst,hunger:state.hunger,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,inventory:state.inventory,kills:state.kills}));}catch(e){}}
-function loadGame(){try{const raw=localStorage.getItem("ashfordRebirthV01");if(!raw)return;const s=JSON.parse(raw);for(const key of ["stage","x","z","health","stamina","thirst","hunger","ammo","hasGun","supplies","kills"]){if(s[key]!==undefined)state[key]=s[key];}
- if(s.inventory)state.inventory=s.inventory;if(state.stage>=7){state.stage=7;startWave();}
- toast("LOCAL CHECKPOINT RESTORED");}catch(e){}}
+function applyQuality(mode,notify=false){
+ qualityMode=mode==="performance"?"performance":"auto";
+ const low=qualityMode==="performance";
+ renderer.setPixelRatio(low?1:Math.min(devicePixelRatio,1.6));
+ renderer.shadowMap.enabled=!low;
+ $("quality-button").textContent=low?"GRAPHICS: PERFORMANCE":"GRAPHICS: AUTO";
+ try{localStorage.setItem("ashfordGraphicsV02",qualityMode);}catch(e){}
+ if(notify)toast(low?"PERFORMANCE GRAPHICS ENABLED":"AUTO GRAPHICS ENABLED");
+}
+function saveGame(){try{localStorage.setItem("ashfordRebirthV01",JSON.stringify({stage:state.stage,x:state.x,z:state.z,health:state.health,stamina:state.stamina,thirst:state.thirst,hunger:state.hunger,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,inventory:state.inventory,kills:state.kills,waveKills:state.waveKills}));}catch(e){}}
+function loadGame(){
+ try{
+  const raw=localStorage.getItem("ashfordRebirthV01");if(!raw)return;
+  Object.assign(state,restoreCheckpoint(JSON.parse(raw),state));
+  if(blocked(state.x,state.z,.35)){
+   const safe=state.stage>=6?{x:44,z:-20}:state.stage>=2&&state.stage<=3?{x:-11,z:-23}:{x:-48,z:-24};
+   state.x=safe.x;state.z=safe.z;
+  }
+  if(state.stage===7){startWave();state.waveKills=clamp(JSON.parse(raw).waveKills||0,0,3);}
+  playerVisual.position.set(state.x,0,state.z);
+  toast("LOCAL CHECKPOINT RESTORED");
+ }catch(e){console.warn("Checkpoint ignored:",e);}
+}
 function inventory(){
  $("inventory-items").innerHTML="";
  const items=[["CROWBAR","🛠️",1,null],["WATER","💧",state.inventory.water,"water"],["CANNED FOOD","🥫",state.inventory.food,"food"],["BANDAGE","🩹",state.inventory.bandage,"bandage"],["PISTOL","🔫",state.hasGun?1:0,null],["AMMO","▤",state.ammo,null],["MEDICAL SUPPLIES","▣",state.supplies,null]];
@@ -354,6 +447,9 @@ function start(){state.started=true;state.paused=false;$("intro").classList.remo
 function controls(){
  $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
+ $("quality-button").onclick=()=>applyQuality(qualityMode==="auto"?"performance":"auto",true);
+ try{qualityMode=localStorage.getItem("ashfordGraphicsV02")||"auto";}catch(e){}
+ applyQuality(qualityMode);
  $("close-pack").onclick=()=>{closeAll();state.paused=false;};
  $("mobile-interact").onclick=interact;$("mobile-attack").onclick=melee;$("mobile-fire").onclick=shoot;
  for(const evt of ["pointerdown","pointerup","pointercancel"])$("mobile-sprint").addEventListener(evt,e=>{e.preventDefault();touch.sprint=evt==="pointerdown";});
@@ -392,7 +488,7 @@ function animate(){
  if(marker){markerRing.rotation.z+=dt*.8;marker.children[2].rotation.y+=dt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
  updateCamera(dt);drawMap();renderer.render(scene,camera);
  // lightweight resolution management for weak Chromebook GPUs
- fpsFrames++;fpsLast+=dt;if(fpsLast>=5){const fps=fpsFrames/fpsLast;if(fps<27&&renderer.getPixelRatio()>1)renderer.setPixelRatio(1);fpsLast=0;fpsFrames=0;}
+ fpsFrames++;fpsLast+=dt;if(fpsLast>=5){const fps=fpsFrames/fpsLast;if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}fpsLast=0;fpsFrames=0;}
 }
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);

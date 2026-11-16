@@ -4,6 +4,26 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## v0.2 audit improvements
+
+The v0.2 audit branch improves the reconstruction without changing the original Sites production game:
+
+- Camera collision with walls, corrected movement/facing, closer third-person framing
+- Camera-directed melee/pistol targeting with basic wall occlusion
+- Doorway-aware infected pursuit, collision checks, and a readable Spitter windup
+- Checkpoint validation, improved mission trigger distances, explicit clinic-gate completion
+- Road grit, puddles, storefront grime, cooler clinic wayfinding, street debris, atmospheric particles
+- Auto/Performance graphics preset (Pause menu) and automatic low-FPS downgrade
+- Modular deterministic logic tests and CI verification
+
+**Verification:** Helper logic checks ran successfully; full browser gameplay and device FPS are **not yet verified**. See [AUDIT.md](AUDIT.md) for findings, risk and the manual QA checklist.
+
+### Automated checks (Node.js 22+)
+
+```bash
+npm run check
+```
+
 ## What is implemented
 
 - Procedural 3D Ashford street and safehouse, Last Stop Market (warm counter lighting, aisles, Mara), Ashford Clinic (cool ward, beds, curtains, wayfinding, Dr. Vale) and a patrol car

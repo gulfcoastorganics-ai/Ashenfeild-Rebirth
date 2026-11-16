@@ -63,13 +63,21 @@
 </div>
 <div class="modal" id="pause-modal">
  <div class="modal-shade"></div>
- <div class="panel-modal pause-box"><div class="eyebrow">GAME PAUSED</div><h2>STAY SHARP.</h2><p>Your progress saves automatically to this browser.</p><button id="resume" class="primary">RESUME MISSION</button><button id="restart" class="ghost">RESTART OPENING ROUTE</button><div class="small-print">Original independent browser prototype. Does not alter the live Sites production game.</div></div>
+ <div class="panel-modal pause-box"><div class="eyebrow">GAME PAUSED</div><h2>STAY SHARP.</h2><p>Your progress saves automatically to this browser.</p><button id="resume" class="primary">RESUME MISSION</button><button id="quality-button" class="ghost">GRAPHICS: AUTO</button><button id="restart" class="ghost">RESTART OPENING ROUTE</button><div class="small-print">Original independent browser prototype. Does not alter the live Sites production game.</div></div>
 </div>
 <div class="modal" id="gameover">
  <div class="modal-shade"></div>
  <div class="panel-modal ending"><div class="eyebrow" id="end-label">CONNECTION LOST</div><h2 id="end-title">YOU DID NOT SURVIVE.</h2><p id="end-message">Ashford doesn't forgive mistakes.</p><button id="end-restart" class="primary">TRY AGAIN</button></div>
 </div>
 <div id="loader" class="loader"><div class="loader-mark">DZ<span>:</span>A</div><div class="loader-line"></div><small>LOADING ASHFORD COUNTY</small></div>
+<script>
+window.addEventListener("error", function () {
+ const loader=document.getElementById("loader");
+ if(loader && !loader.classList.contains("hide")){
+  loader.textContent="ASHFORD FAILED TO LOAD — CHECK YOUR CONNECTION AND WEBGL SUPPORT";
+ }
+});
+</script>
 <script type="module" src="./src/game.js"></script>
 </body>
 </html>
