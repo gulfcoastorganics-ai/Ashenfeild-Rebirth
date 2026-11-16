@@ -35,7 +35,7 @@ const state={
  time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0
 };
 const stages=[
- {title:"Exit the barricaded house",desc:"Make your way outside. The street is quiet—too quiet.",point:{x:-47,z:-11},kind:"arrive",radius:5},
+ {title:"Exit the barricaded house",desc:"Make your way outside. The street is quiet—too quiet.",point:{x:-47,z:-11},kind:"arrive",radius:2.4},
  {title:"Find Last Stop Market",desc:"Search the storefront for survivors and supplies.",point:{x:-11,z:-15},kind:"arrive",radius:5},
  {title:"Speak with Mara",desc:"Find Mara behind the counter inside Last Stop Market.",point:{x:-14,z:-25},kind:"interact",name:"MARA"},
  {title:"Collect the emergency supplies",desc:"The supply crate is in the back aisle. Take what you can carry.",point:{x:-7,z:-29},kind:"interact",name:"SUPPLY CACHE"},
@@ -43,7 +43,7 @@ const stages=[
  {title:"Reach Ashford Clinic",desc:"Follow the road east. Find the clinic entrance.",point:{x:44,z:-15},kind:"arrive",radius:6},
  {title:"Find Dr. Vale",desc:"The last medic is sheltering in the rear ward.",point:{x:48,z:-28},kind:"interact",name:"DR. VALE"},
  {title:"Hold back the infected",desc:"Protect the clinic. Defeat four infected during the assault.",point:{x:45,z:-13},kind:"combat"},
- {title:"Secure the clinic entrance",desc:"Return to the front doors. You survived the first night.",point:{x:44,z:-15},kind:"arrive",radius:6}
+ {title:"Secure the clinic entrance",desc:"Return to the front doors and secure the clinic gate.",point:{x:44,z:-15},kind:"interact",name:"CLINIC GATE"}
 ];
 const keys={},touch={x:0,y:0,sprint:false};
 let cameraYaw=Math.PI,cameraPitch=.56,lastPointer=null,activeDialog=false;
@@ -270,6 +270,7 @@ function interact(){
  else if(state.stage===3){state.supplies=1;state.inventory.water+=2;state.inventory.food+=2;toast("SUPPLIES RECOVERED + WATER + FOOD");tone(900,.2);advance();}
  else if(state.stage===4){state.hasGun=true;state.weapon="pistol";state.ammo=36;toast("PISTOL RECOVERED · 36 ROUNDS");tone(920,.24);advance();}
  else if(state.stage===6)showDialogue("DR. VALE","You brought supplies. That's more than I expected. Hold the entrance while I stabilize the ward. They're coming from the road—don't let them inside.",()=>{advance();startWave();});
+ else if(state.stage===8)victory();
 }
 function startWave(){state.waveStarted=true;state.waveKills=0;state.waveTimer=0;
  for(const [type,x,z] of [["walker",32,6],["runner",51,6],["brute",61,4],["spitter",27,-3],["walker",56,12],["runner",37,12]])spawnEnemy(type,x,z,true);
