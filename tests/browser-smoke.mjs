@@ -76,7 +76,52 @@ try{
  const critical=consoleErrors.filter(s=>/PAGE:|NETWORK:.*(?:three\.module|nav\.mjs|game\.js)/.test(s));
  assert(critical.length===0,"Browser module/runtime failures: "+critical.join(" | "));
  report("No uncaught JS or module load failures","PASS");
- console.log("BROWSER SMOKE PASS: all required checks complete");
+
+ // Scripted, browser-rendered mission transitions. Teleports are available ONLY on 127.0.0.1/?__qa=1.
+ // This verifies all route objectives and interactions, not physical traversal or combat balancing.
+ const route=await browser.newPage({viewport:{width:1024,height:640},deviceScaleFactor:1});
+ route.on("pageerror",err=>consoleErrors.push("ROUTE PAGE: "+err.message));
+ await route.goto("http://127.0.0.1:"+port+"/?__qa=1",{waitUntil:"domcontentloaded"});
+ await route.waitForFunction(()=>Boolean(window.__ashfordQA),null,{timeout:45000});
+ await route.locator("#start-button").click();
+ const snapshot=()=>route.evaluate(()=>window.__ashfordQA.snapshot());
+ async function warp(x,z,expected){
+  await route.evaluate(([a,b])=>window.__ashfordQA.teleport(a,b),[x,z]);
+  await route.waitForFunction(stage=>window.__ashfordQA.snapshot().stage===stage,expected,{timeout:15000});
+ }
+ async function use(x,z,expected,speaker=null){
+  await route.evaluate(([a,b])=>window.__ashfordQA.teleport(a,b),[x,z]);
+  await route.keyboard.press("e");
+  if(speaker){
+   await route.locator("#dialogue").waitFor({timeout:15000});
+   assert.equal(await route.locator("#dialogue-speaker").innerText(),speaker);
+   await route.locator("#dialogue-next").click();
+  }
+  await route.waitForFunction(stage=>window.__ashfordQA.snapshot().stage===stage,expected,{timeout:15000});
+ }
+ await warp(-47,-11,1); // Leave barricaded house
+ await warp(-11,-15,2); // Market exterior
+ await use(-14,-25,3,"MARA"); // Dialogue
+ await use(-7,-29,4); // Supplies
+ let progress=await snapshot();
+ assert.equal(progress.supplies,1);
+ await use(17,3,5); // Patrol car weapon
+ progress=await snapshot();
+ assert.equal(progress.hasGun,true);
+ assert(progress.ammo>=12,"Patrol car did not supply ammunition");
+ await warp(44,-15,6); // Clinic exterior
+ await use(48,-28,7,"DR. VALE"); // Clinic dialogue, begin defense
+ await route.screenshot({path:resolve(root,"artifacts","clinic-defense.png"),animations:"disabled"});
+ await route.evaluate(()=>window.__ashfordQA.finishWave()); // Deterministic combat resolution callback
+ await route.waitForFunction(()=>window.__ashfordQA.snapshot().stage===8,null,{timeout:15000});
+ progress=await snapshot();assert.equal(progress.waveKills,4);
+ await use(44,-15,8); // Final gate interaction invokes victory
+ await route.waitForFunction(()=>window.__ashfordQA.snapshot().ended,null,{timeout:15000});
+ assert(await route.locator("#end-title").isVisible(),"Ending screen not visible");
+ assert((await route.locator("#end-title").innerText()).includes("FIRST NIGHT"));
+ report("Scripted market–patrol–clinic mission transitions","PASS","9 objectives, NPC dialogue, pickups, defense and victory");
+ console.log("BROWSER QA PASS: smoke and scripted mission progression complete");
+
 }catch(err){
  console.error("BROWSER SMOKE FAILED",err.stack||err);
  if(!failures.length)failures.push(err.message||String(err));
