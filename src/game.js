@@ -47,6 +47,7 @@ const stages=[
 ];
 const keys={},touch={x:0,y:0,sprint:false};
 let cameraYaw=Math.PI,cameraPitch=.56,lastPointer=null,activeDialog=false;
+let qualityMode="auto";
 const solidMeshes=[];
 const cameraRay=new THREE.Raycaster();
 
@@ -322,6 +323,9 @@ function updateEnemies(dt){
  if(e.type==="spitter"&&d<13&&d>2.4&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){const orb=sphere(e.x,1.5,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));effects.push({mesh:orb,life:3,total:3,kind:"spit",vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8});e.cd=3.4;}
  e.mesh.position.set(e.x,Math.sin(e.phase)*.025,e.z);
  animateLimbs(e.mesh,Math.sin(e.phase)*.56);
+ // A visible half-second windup communicates the Spitter's ranged attack.
+ if(e.type==="spitter")e.mesh.userData.torso.rotation.x=e.cd>.01&&e.cd<.68?-(.68-e.cd)*.75:0;
+ if(e.type==="runner")e.mesh.userData.torso.rotation.x=-.30;
  }
 }
 function animateLimbs(char,amount){const limbs=char.userData.limbs;if(!limbs)return;limbs[0].rotation.x=amount*.48;limbs[1].rotation.x=-amount*.65;limbs[2].rotation.x=-amount*.48;limbs[3].rotation.x=amount*.65;}
@@ -399,6 +403,15 @@ function updateCamera(dt){
  if(hits.length)desired.copy(pivot).addScaledVector(dir,Math.max(1.5,hits[0].distance-.35));
  camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
 }
+function applyQuality(mode,notify=false){
+ qualityMode=mode==="performance"?"performance":"auto";
+ const low=qualityMode==="performance";
+ renderer.setPixelRatio(low?1:Math.min(devicePixelRatio,1.6));
+ renderer.shadowMap.enabled=!low;
+ $("quality-button").textContent=low?"GRAPHICS: PERFORMANCE":"GRAPHICS: AUTO";
+ try{localStorage.setItem("ashfordGraphicsV02",qualityMode);}catch(e){}
+ if(notify)toast(low?"PERFORMANCE GRAPHICS ENABLED":"AUTO GRAPHICS ENABLED");
+}
 function saveGame(){try{localStorage.setItem("ashfordRebirthV01",JSON.stringify({stage:state.stage,x:state.x,z:state.z,health:state.health,stamina:state.stamina,thirst:state.thirst,hunger:state.hunger,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,inventory:state.inventory,kills:state.kills,waveKills:state.waveKills}));}catch(e){}}
 function loadGame(){
  try{
@@ -433,6 +446,9 @@ function start(){state.started=true;state.paused=false;$("intro").classList.remo
 function controls(){
  $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
+ $("quality-button").onclick=()=>applyQuality(qualityMode==="auto"?"performance":"auto",true);
+ try{qualityMode=localStorage.getItem("ashfordGraphicsV02")||"auto";}catch(e){}
+ applyQuality(qualityMode);
  $("close-pack").onclick=()=>{closeAll();state.paused=false;};
  $("mobile-interact").onclick=interact;$("mobile-attack").onclick=melee;$("mobile-fire").onclick=shoot;
  for(const evt of ["pointerdown","pointerup","pointercancel"])$("mobile-sprint").addEventListener(evt,e=>{e.preventDefault();touch.sprint=evt==="pointerdown";});
@@ -471,7 +487,7 @@ function animate(){
  if(marker){markerRing.rotation.z+=dt*.8;marker.children[2].rotation.y+=dt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
  updateCamera(dt);drawMap();renderer.render(scene,camera);
  // lightweight resolution management for weak Chromebook GPUs
- fpsFrames++;fpsLast+=dt;if(fpsLast>=5){const fps=fpsFrames/fpsLast;if(fps<27&&renderer.getPixelRatio()>1)renderer.setPixelRatio(1);fpsLast=0;fpsFrames=0;}
+ fpsFrames++;fpsLast+=dt;if(fpsLast>=5){const fps=fpsFrames/fpsLast;if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}fpsLast=0;fpsFrames=0;}
 }
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);
