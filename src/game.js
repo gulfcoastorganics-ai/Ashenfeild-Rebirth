@@ -491,15 +491,28 @@ function installLocalQA(){
 }
 const clock=new THREE.Clock();let fpsFrames=0,fpsLast=0;
 function animate(){
- requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.06);
+ requestAnimationFrame(animate);
+ // Simulate up to 250 ms of wall-clock time using small steps so weak GPUs
+ // don't slow player movement or tunnel through thin walls.
+ const frameDt=Math.min(clock.getDelta(),.25);
  if(state.started&&!state.paused&&!state.ended){
-  state.time+=dt;state.lastSave+=dt;updatePlayer(dt);updateEnemies(dt);updateEffects(dt);hud();
+  const count=Math.max(1,Math.ceil(frameDt/.045)),dt=frameDt/count;
+  for(let step=0;step<count&&state.started&&!state.paused&&!state.ended;step++){
+   state.time+=dt;state.lastSave+=dt;
+   updatePlayer(dt);updateEnemies(dt);updateEffects(dt);
+  }
+  hud();
   if(state.lastSave>12){saveGame();state.lastSave=0;}
  }
- if(marker){markerRing.rotation.z+=dt*.8;marker.children[2].rotation.y+=dt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
- updateCamera(dt);drawMap();renderer.render(scene,camera);
- // lightweight resolution management for weak Chromebook GPUs
- fpsFrames++;fpsLast+=dt;if(fpsLast>=5){const fps=fpsFrames/fpsLast;if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}fpsLast=0;fpsFrames=0;}
+ if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
+ updateCamera(frameDt);drawMap();renderer.render(scene,camera);
+ // Measure actual elapsed frame time rather than capped physics delta.
+ fpsFrames++;fpsLast+=frameDt;
+ if(fpsLast>=5){
+  const fps=fpsFrames/fpsLast;
+  if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}
+  fpsLast=0;fpsFrames=0;
+ }
 }
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);
