@@ -1,7 +1,7 @@
 name: Reconstruction prototype checks
 on:
   push:
-    branches: [reconstruction-prototype, reconstruction-v0.2-audit, reconstruction-v0.3-browser-qa]
+    branches: [reconstruction-prototype]
   pull_request:
     branches: [reconstruction-prototype]
 permissions:
