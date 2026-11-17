@@ -36,15 +36,13 @@ try{
  function angleDiff(a,b){return Math.atan2(Math.sin(a-b),Math.cos(a-b));}
  const ensureAlive=async label=>{const s=await snap();assert(!s.ended&&s.health>0,"Player died during "+label+" at "+JSON.stringify(s));return s;};
  async function aimAt(x,z,tolerance=.13){
-  for(let i=0;i<18;i++){
+  for(let i=0;i<36;i++){
    const p=await ensureAlive("aim");
    const yaw=Math.atan2(-(x-p.x),-(z-p.z));
    const err=angleDiff(yaw,p.cameraYaw);
    if(Math.abs(err)<tolerance)return;
    const key=err>0?"q":"r";
-   await page.keyboard.down(key);
-   await wait(Math.max(100,Math.min(440,Math.abs(err)/2.8*800)));
-   await page.keyboard.up(key);
+   await page.keyboard.press(key); // fixed 0.12rad step, no frame-rate-dependent hold
   }
   throw new Error("Unable to align camera aim");
  }
