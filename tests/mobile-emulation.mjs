@@ -27,6 +27,12 @@ try{
  assert(await page.locator("#hud").isVisible());
  assert(await page.locator("#mobile-controls").isVisible());
  await page.locator("#mobile-attack").tap();
+ const beforeRoll=await page.evaluate(()=>window.__ashfordQA.snapshot());
+ await page.locator("#mobile-dodge").tap();
+ const afterRoll=await page.evaluate(()=>window.__ashfordQA.snapshot());
+ assert(afterRoll.stamina<beforeRoll.stamina,"Dodge did not consume stamina");
+ assert(afterRoll.dodgeCooldown>0,"Dodge cooldown not started");
+
  await page.locator("#mobile-interact").tap();
  // Touch emulation checks responsive controls; not a physical phone benchmark.
  const before=await page.evaluate(()=>window.__ashfordQA.snapshot());
