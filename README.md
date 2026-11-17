@@ -4,6 +4,26 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.5 — Combat & Character Fidelity
+
+This is the **independent reconstruction branch**, not original Sites v7.1 source.
+
+- Unified pistol and crowbar range, damage and directional hit tests in `src/combat.mjs`; bullets cannot pass collision cover.
+- Added hit/kill crosshair feedback and short survivor animation overlays for strikes, recoil, running and breathing without changing the existing character skeleton.
+- Infected attacks now anticipate (Runner fast, Brute heavy, Spitter ranged), with strike distance and line of sight rechecked at resolution time. Non-Brute enemies can have a windup interrupted by a successful hit.
+- Updated survivor plaid material with more realistic fading, procedural fibers and weathering using a small reusable canvas texture.
+- New browser combat integration test drives real **F** and **Space** keyboard actions against a localhost-only test encounter and checks actual health, kills and enemy damage. No test-only call to `hurtEnemy` or `finishWave` is used.
+- Earlier route, mobile, WebGL and checkpoint tests are retained.
+
+```bash
+npm install
+npx playwright install chromium
+npm run check
+npm run test:combat
+```
+
+The combat test uses a localhost-only encounter arrangement and suppresses damage **only for the multi-enemy weapon tests** to make software-rendered CI deterministic; it separately verifies an enemy can injure the player with damage enabled. It does **not** certify a complete unaided survival playthrough or hardware FPS. See [COMBAT-QA.md](COMBAT-QA.md).
+
 ## V0.4 — Navigation, traversal tests and visual quality
 
 This remains an **independent reconstruction**, not recovered Sites v7.1 source.

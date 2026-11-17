@@ -30,6 +30,8 @@ jobs:
         run: npm run test:route
       - name: Mobile viewport and touch-control test
         run: npm run test:mobile
+      - name: Combat input and infected attack integration test
+        run: npm run test:combat
       - name: Attach browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
