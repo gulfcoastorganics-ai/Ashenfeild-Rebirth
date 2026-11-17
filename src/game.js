@@ -343,7 +343,7 @@ function startWave(){state.waveStarted=true;state.waveKills=0;state.waveTimer=0;
  toast("CLINIC UNDER ATTACK");}
 function victory(){state.ended=true;state.paused=true;$("end-label").textContent="OPENING ROUTE CLEARED";$("end-title").textContent="FIRST NIGHT SURVIVED.";$("end-message").textContent="You reached the ward, found allies, and secured Ashford Clinic. This is the end of the reconstruction opening slice.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(680,.6);}
 function gameOver(){state.ended=true;state.paused=true;$("end-label").textContent="SIGNAL LOST";$("end-title").textContent="YOU DID NOT SURVIVE.";$("end-message").textContent="The dead claimed another survivor. Return to the start and try again.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(125,.6,"sawtooth",.08);}
-function takeDamage(amount){if(state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
+function takeDamage(amount){if(state.qaNoDamage||state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
 function melee(){if(state.attackTime>0||!state.started||state.paused)return;state.attackTime=.56;tone(175,.1,"triangle",.06);
  const p=pos();const facing=aimDirection();const target=enemies.filter(e=>!e.dead&&dist(e,p)<2.9)
  .filter(e=>V(e.x-p.x,0,e.z-p.z).normalize().dot(facing)>.22&&!lineBlocked(p.x,p.z,e.x,e.z,.11))
@@ -553,7 +553,12 @@ function controls(){
 function installLocalQA(){
  if(location.hostname!=="127.0.0.1"||new URLSearchParams(location.search).get("__qa")!=="1")return;
  Object.defineProperty(window,"__ashfordQA",{configurable:false,value:Object.freeze({
-  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z};},
+  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,ambush:e.ambush}))};},
+  perf(){const frames=[...qaFrameMs].sort((a,b)=>a-b);const n=frames.length,avg=n?frames.reduce((x,y)=>x+y,0)/n:0;
+   return {sampleCount:n,averageFPS:avg?1000/avg:null,p50FrameMs:n?frames[Math.floor(n*.5)]:null,p95FrameMs:n?frames[Math.min(n-1,Math.floor(n*.95))]:null,
+     drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio()};
+  },
+  noDamage(on){state.qaNoDamage=Boolean(on);},
   teleport(x,z){if(!Number.isFinite(x)||!Number.isFinite(z))throw new Error("Invalid QA location");state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);playerVisual.position.set(state.x,0,state.z);},
   finishWave(){if(state.stage!==7)throw new Error("Clinic assault is not active");
    for(const enemy of [...enemies].filter(e=>e.ambush&&!e.dead).slice(0,4)){hurtEnemy(enemy,enemy.hp+1);}
@@ -561,11 +566,14 @@ function installLocalQA(){
  })});
 }
 const clock=new THREE.Clock();let fpsFrames=0,fpsLast=0;
+const qaFrameMs=[];
 function animate(){
  requestAnimationFrame(animate);
  // Simulate up to 250 ms of wall-clock time using small steps so weak GPUs
  // don't slow player movement or tunnel through thin walls.
- const frameDt=Math.min(clock.getDelta(),.25);
+ const elapsed=Math.max(.001,clock.getDelta());
+ const frameDt=Math.min(elapsed,.25);
+ if(state.started&&!state.paused&&!state.ended){qaFrameMs.push(elapsed*1000);if(qaFrameMs.length>180)qaFrameMs.shift();}
  if(state.started&&!state.paused&&!state.ended){
   const count=Math.max(1,Math.ceil(frameDt/.045)),dt=frameDt/count;
   for(let step=0;step<count&&state.started&&!state.paused&&!state.ended;step++){
@@ -578,7 +586,7 @@ function animate(){
  if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
  updateCamera(frameDt);drawMap();renderer.render(scene,camera);
  // Measure actual elapsed frame time rather than capped physics delta.
- fpsFrames++;fpsLast+=frameDt;
+ fpsFrames++;fpsLast+=elapsed;
  if(fpsLast>=5){
   const fps=fpsFrames/fpsLast;
   if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}
