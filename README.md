@@ -13,6 +13,8 @@ A small, original-code third-person 3D browser survival game built from the reme
 - Updated the **survivor silhouette** with fitted red-black plaid, tapered jacket, brown trousers and a green structured backpack with straps, pockets and metal hardware.
 - Added a non-interactive blue-shirted **clinic guard** beside a refined Dr. Vale NPC, approximating the reference's two-survivor composition without changing dialogue.
 - Pulled the third-person camera in for a more expressive over-the-shoulder view.
+- Corrected screenshot-review occlusion from near-camera ceiling fixtures and moved clinic curtains to the side wards; reshaped heads toward human proportions.
+- Improved the **Graphics: Performance** fallback so low-FPS browsers with device-pixel ratio 1 also reduce rendering cost, including 0.85 resolution scale and disabled shadows.
 - Reorganized the HUD around compact **health/stamina**, a left-side **field objective**, top-right **day/weather-survival readout**, functional **LIGHT** toggle (L), and a bottom-right **weapon card**, retaining mobile and inventory controls.
 - No paid models, external textures, new skeletons or production deployment.
 
