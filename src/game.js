@@ -37,7 +37,8 @@ $("game").appendChild(renderer.domElement);
 const hemi=new THREE.HemisphereLight(0x98acb5,0x252219,1.4);scene.add(hemi);
 const moon=new THREE.DirectionalLight(0xddd5c1,1.8);moon.position.set(-21,40,22);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0004;scene.add(moon);
 const world=new THREE.Group();scene.add(world);
-const obstacles=[],enemies=[],effects=[],lamps=[];
+const obstacles=[],enemies=[],effects=[],lamps=[],localLights=[];
+let lightBudgetElapsed=0;
 let playerVisual,marker,markerRing;
 const state={
  started:false,paused:true,ended:false,stage:0,health:100,stamina:100,thirst:80,hunger:80,
@@ -83,7 +84,13 @@ function instanced(count,material,transform,geometry=unitCube){
 }
 function cyl(x,y,z,r,depth,material,group=world){const m=mesh(unitCylinder,material,x,y,z,group);m.scale.set(r,depth,r);m.castShadow=true;return m}
 function sphere(x,y,z,r,material,group=world){const m=mesh(unitSphere,material,x,y,z,group);m.scale.setScalar(r);m.castShadow=true;return m}
-function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);return l}
+function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);localLights.push(l);return l;}
+function updateLightBudget(){
+ for(const l of localLights){
+  const limit=Math.max(24,l.distance+12);
+  l.visible=Math.hypot(l.position.x-state.x,l.position.z-state.z)<limit;
+ }
+}
 function label(text,w=9,h=1.9,bg="#121a1c",fg="#e3c18b",size=50){
  const c=document.createElement("canvas");c.width=1024;c.height=256;const ctx=c.getContext("2d");ctx.fillStyle=bg;ctx.fillRect(0,0,1024,256);
  ctx.strokeStyle="#a67b51";ctx.lineWidth=9;ctx.strokeRect(11,11,1002,234);
@@ -664,6 +671,7 @@ function currentMetrics(){
  const sample=summarizeFrames(qaFrameMs);
  return {...sample,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
  geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
+ pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,
  pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
  quality:qualityMode,build:"reconstruction-v0.7"};
 }
@@ -773,7 +781,8 @@ function installLocalQA(){
   snapshot(){return {stage:state.stage,health:state.health,stamina:state.stamina,dodgeCooldown:state.dodgeCooldown,dodgeTime:state.dodgeTime,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,cameraYaw,inventory:{...state.inventory},enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,hp:e.hp,max:e.max,ambush:e.ambush,intent:e.attackIntent?.kind||null,windup:e.windup}))};},
   perf(){const frames=[...qaFrameMs].sort((a,b)=>a-b);const n=frames.length,avg=n?frames.reduce((x,y)=>x+y,0)/n:0;
    return {sampleCount:n,averageFPS:avg?1000/avg:null,p50FrameMs:n?frames[Math.floor(n*.5)]:null,p95FrameMs:n?frames[Math.min(n-1,Math.floor(n*.95))]:null,
-     drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio()};
+     drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
+ pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,pixelRatio:renderer.getPixelRatio()};
   },
   noDamage(on){state.qaNoDamage=Boolean(on);},
   combatSetup(type="walker",range=6){
@@ -815,7 +824,7 @@ function animate(){
   if(state.lastSave>12){saveGame();state.lastSave=0;}
  }
  if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
- updateCamera(frameDt);drawMap();renderer.render(scene,camera);
+ updateCamera(frameDt);drawMap();lightBudgetElapsed+=frameDt;if(lightBudgetElapsed>=.38){updateLightBudget();lightBudgetElapsed=0;}renderer.render(scene,camera);
  perfPanelElapsed+=elapsed;if(perfPanelElapsed>.9){updatePerfReadout();perfPanelElapsed=0;}
  // Measure actual elapsed frame time rather than capped physics delta.
  fpsFrames++;fpsLast+=elapsed;
@@ -828,6 +837,6 @@ function animate(){
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);
  createNPC("mara",-14,-27,Math.PI);createNPC("vale",48,-29,Math.PI);
- spawnAmbient();makeMarker();setMarker();controls();installLocalQA();updateCamera(1);animate();
+ updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();updateCamera(1);animate();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}
