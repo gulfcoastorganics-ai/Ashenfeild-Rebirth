@@ -221,7 +221,7 @@ function makeWorld(){
  // Safehouse
  house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:wornSurface(0x505452,121),theme:"safehouse"});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
- const safeLamp=box(-49,4.73,-32,1.9,.13,.38,matUnique(0xf3d7a3));
+ const safeLamp=box(-49,4.73,-19.2,1.9,.13,.38,matUnique(0xf3d7a3));
  safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
  addLight(-48,3.7,-24,0xffd1a0,7,20);
  box(-54,.62,-30,3,1.2,2,dark,true);box(-40,.6,-32,1.8,1.1,1.6,mat(0x6a5844));
