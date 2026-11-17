@@ -69,7 +69,8 @@ const unitCube=new THREE.BoxGeometry(1,1,1);
 const unitSphere=new THREE.SphereGeometry(1,10,8);
 const unitCylinder=new THREE.CylinderGeometry(1,1,1,9);
 const sleeveGeometry=new THREE.CylinderGeometry(.15,.18,.8,8);
-const trouserGeometry=new THREE.CylinderGeometry(.16,.19,.87,8);
+const trouserGeometry=new THREE.CylinderGeometry(.17,.19,.87,9);
+const jacketTorsoGeometry=new THREE.CylinderGeometry(.49,.35,1.05,10);
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function instanced(count,material,transform,geometry=unitCube){
  const group=new THREE.InstancedMesh(geometry,material,count);
@@ -353,31 +354,26 @@ function makeCar(x,z,color,police=false){
 }
 function makeTree(x,z){cyl(x,1.35,z,.25,2.7,mat(0x55483a));for(let i=0;i<3;i++)sphere(x+rand(-.6,.6),3.2+rand(-.3,.7),z+rand(-.5,.5),rand(.9,1.5),mat([0x47574d,0x59604b,0x3d4c45][i]));}
 function plaidTexture(){
- const c=document.createElement("canvas");c.width=c.height=256;
- const ctx=c.getContext("2d");
- ctx.fillStyle="#535657";ctx.fillRect(0,0,256,256);
- // Slightly faded red-and-charcoal plaid; all fabric detail stays in one texture.
- for(let n=0;n<256;n+=64){
-  ctx.fillStyle="#713f3d";ctx.fillRect(n,0,26,256);ctx.fillRect(0,n,256,26);
-  ctx.fillStyle="rgba(30,36,42,.42)";
-  ctx.fillRect(n+28,0,7,256);ctx.fillRect(0,n+28,256,7);
+ const c=document.createElement("canvas");c.width=c.height=512;
+ const ctx=c.getContext("2d");ctx.fillStyle="#171a1a";ctx.fillRect(0,0,512,512);
+ // Screenshot reference: bright red, dense charcoal plaid with narrow dark seams.
+ for(let k=0;k<512;k+=128){
+  ctx.fillStyle="#8e262c";ctx.fillRect(k+4,0,63,512);ctx.fillRect(0,k+5,512,63);
+  ctx.fillStyle="rgba(192,65,57,.58)";ctx.fillRect(k+18,0,9,512);ctx.fillRect(0,k+19,512,9);
+  ctx.fillStyle="rgba(23,26,27,.8)";ctx.fillRect(k+68,0,14,512);ctx.fillRect(0,k+68,512,14);
  }
- for(let n=0;n<256;n+=32){
-  ctx.fillStyle="#29394188";ctx.fillRect(n,0,4,256);ctx.fillRect(0,n,256,4);
+ for(let k=0;k<512;k+=32){
+  ctx.fillStyle="rgba(2,5,5,.31)";ctx.fillRect(k,0,3,512);ctx.fillRect(0,k,512,3);
  }
- for(let i=0;i<3200;i++){
-  const x=rand(0,256),y=rand(0,256);
-  ctx.fillStyle=i%3===0?"rgba(208,184,150,.095)":"rgba(13,14,17,.095)";
-  ctx.fillRect(x,y,rand(.3,1.8),rand(.3,1.7));
+ let seed=91243;const rng=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ for(let n=0;n<5500;n++){
+  const x=rng()*512,y=rng()*512;ctx.fillStyle=n%4===0?"rgba(198,163,132,.12)":"rgba(0,0,0,.09)";
+  ctx.fillRect(x,y,.2+rng()*2,.25+rng()*2.6);
  }
- for(let i=0;i<32;i++){
-  const x=rand(0,256),y=rand(0,256);
-  ctx.strokeStyle="rgba(17,23,23,.15)";ctx.lineWidth=rand(.5,2.5);
-  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+rand(-17,17),y+rand(-4,4));ctx.stroke();
- }
- const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
- t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- return t;
+ const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+ tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+ tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return tex;
 }
 const plaidMat=new THREE.MeshStandardMaterial({map:plaidTexture(),roughness:.98});
 const infectedSkin=wornSurface(0x8c9783,923,1,1);
@@ -391,9 +387,9 @@ function humanoid(kind="player"){
  const group=new THREE.Group();
  const zombie=["walker","runner","brute","spitter"].includes(kind);
  const skin=zombie?infectedSkin:mat(kind==="mara"?0xc39e80:0xb8a18b);
- const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xc5d1c9):kind==="runner"?infectedFabric.runner:kind==="brute"?infectedFabric.brute:kind==="spitter"?infectedFabric.spitter:infectedFabric.walker;
- const pants=mat(zombie?0x48473f:kind==="vale"?0x4d616c:0x39444a);
- const torso=box(0,1.61,0,.85,1.0,.48,zombie?fabric.clone():fabric,false,group);
+ const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xd5d6ce):kind==="guard"?mat(0x607981):kind==="runner"?infectedFabric.runner:kind==="brute"?infectedFabric.brute:kind==="spitter"?infectedFabric.spitter:infectedFabric.walker;
+ const pants=mat(zombie?0x48473f:kind==="vale"?0xa9aaa0:kind==="player"?0x554539:kind==="guard"?0x2f5265:0x39444a);
+ const torso=mesh(jacketTorsoGeometry,zombie?fabric.clone():fabric,0,1.61,0,group);torso.castShadow=true;
  box(0,1.11,0,.72,.18,.43,pants,false,group);
  const head=sphere(0,2.42,-.01,.33,skin,group);
  const hair=sphere(0,2.69,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.29,.13,.28);
@@ -408,21 +404,38 @@ function humanoid(kind="player"){
   box(0,-.89,-.10,.37,.20,.55,dark,false,leg);limbs.push(leg);
  }
  if(kind==="player"){
-  const canvas=mat(0x514d42),seam=mat(0x8a8576),worn=mat(0x3d4246),metal=mat(0x8d9494,.38,.6);
-  box(0,1.56,.38,.73,.94,.28,canvas,false,group);
-  for(let side of [-1,1]){
-   const strap=box(side*.27,1.66,-.26,.10,.90,.09,seam,false,group);strap.rotation.z=side*.12;
-   box(side*.26,1.78,-.335,.16,.12,.045,metal,false,group);
-   box(side*.30,1.40,.53,.11,.28,.06,seam,false,group);
+  const olive=mat(0x334b36),edging=mat(0x1c2921),webbing=mat(0x647454),worn=mat(0x392b29),hardware=mat(0xa5a58a,.42,.6);
+  // Structured green field backpack with folded flap, straps and deep side pockets.
+  box(0,1.57,.43,.72,1.06,.40,olive,false,group);
+  box(0,1.99,.67,.68,.22,.08,mat(0x405940),false,group);
+  box(0,1.82,.679,.55,.055,.06,webbing,false,group);
+  box(0,1.20,.65,.48,.32,.13,olive,false,group);
+  box(0,1.36,.728,.49,.065,.06,edging,false,group);
+  for(const side of [-1,1]){
+   const strap=box(side*.31,1.65,-.33,.11,.91,.10,edging,false,group);strap.rotation.z=side*.12;
+   box(side*.34,1.75,-.39,.10,.22,.055,webbing,false,group);
+   box(side*.38,1.42,.41,.16,.60,.30,olive,false,group);
+   box(side*.40,1.27,.60,.13,.08,.06,webbing,false,group);
+   box(side*.26,1.82,.71,.07,.16,.065,hardware,false,group);
   }
-  box(0,1.16,.55,.55,.32,.10,canvas,false,group);
-  box(0,1.38,.544,.48,.08,.08,seam,false,group);
-  box(.47,1.05,-.09,.14,.5,.13,metal,false,group);
-  // Existing animation groups are preserved: elbow and knee wear follows their rig.
-  for(const idx of [0,2])box(0,-.55,-.17,.30,.25,.06,worn,false,limbs[idx]);
-  for(const idx of [1,3])box(0,-.58,-.19,.31,.25,.065,worn,false,limbs[idx]);
+  // Weathered elbows and knees attached to the existing animation pivots.
+  for(const idx of [0,2])box(0,-.53,-.17,.28,.19,.07,worn,false,limbs[idx]);
+  for(const idx of [1,3])box(0,-.56,-.19,.30,.19,.065,worn,false,limbs[idx]);
+  box(0,1.08,-.34,.38,.11,.10,mat(0x2b2421),false,group);
+  box(.46,1.05,-.08,.11,.48,.12,hardware,false,group);
  }
- if(kind==="vale"){box(0,1.36,-.28,.52,.75,.07,mat(0xe1e4da),false,group);box(0,1.49,-.35,.09,.3,.07,mat(0x35727b),false,group);}
+ if(kind==="vale"){
+  box(0,1.36,-.29,.52,.65,.06,mat(0xe0e2da),false,group);
+  box(.27,1.61,-.35,.12,.16,.055,mat(0x4c7e80),false,group);
+  box(0,1.49,-.35,.08,.32,.055,mat(0x819d9c),false,group);
+  for(const side of [-1,1])box(side*.16,1.69,-.34,.035,.15,.06,mat(0xbac4c0),false,group);
+ }
+ if(kind==="guard"){
+  box(0,2.70,0,.66,.22,.60,mat(0x59665b),false,group);
+  box(0,2.60,-.27,.65,.06,.45,mat(0x464e46),false,group);
+  box(-.27,1.70,-.31,.14,.21,.05,mat(0x9ca395),false,group);
+  box(0,1.21,-.30,.48,.15,.06,mat(0x3d4c4d),false,group);
+ }
  if(kind==="mara"){box(0,1.65,-.29,.60,.74,.12,mat(0x473f37),false,group);}
  if(kind==="brute"){
   group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x*=1.12;
@@ -902,7 +915,7 @@ function animate(){
 }
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);
- createNPC("mara",-14,-27,Math.PI);createNPC("vale",48,-29,Math.PI);
+ createNPC("mara",-14,-27,Math.PI);createNPC("vale",51,-29,Math.PI);createNPC("guard",35,-28,Math.PI);
  updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();updateCamera(1);animate();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}
