@@ -120,6 +120,31 @@ function gritTexture(){
 }
 function wall(x,z,w,d,h,material=brick){return box(x,h/2,z,w,h,d,material,true)}
 function floor(x,z,w,d,material){return box(x,.025,z,w,.05,d,material)}
+function referenceClinicFloor(){
+ const c=document.createElement("canvas");c.width=c.height=512;
+ const ctx=c.getContext("2d");
+ let seed=0x8173a21;const noise=()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296;};
+ const size=256;
+ for(let row=0;row<2;row++)for(let col=0;col<2;col++){
+  const x=col*size,y=row*size,light=(col+row)%2===0;
+  ctx.fillStyle=light?"#a7a79d":"#575b58";ctx.fillRect(x,y,size,size);
+  ctx.fillStyle="rgba(17,20,21,.28)";ctx.fillRect(x,y,3,size);ctx.fillRect(x,y,size,3);
+  for(let k=0;k<1700;k++){
+   const px=x+noise()*size,py=y+noise()*size;
+   ctx.fillStyle=noise()>.56?"rgba(30,33,29,.085)":"rgba(216,204,178,.07)";
+   const l=.3+noise()*5;ctx.fillRect(px,py,l,l*(.2+noise()));
+  }
+  for(let k=0;k<11;k++){
+   const px=x+noise()*size,py=y+noise()*size;
+   ctx.strokeStyle="rgba(21,24,21,.12)";ctx.lineWidth=.5+noise()*2;
+   ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+(noise()-.5)*26,py+(noise()-.5)*20);ctx.stroke();
+  }
+ }
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+ t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(31/3.6,26/3.6);
+ t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return t;
+}
 function interiorFloorTexture(w,d,theme="safehouse"){
  const c=document.createElement("canvas");c.width=c.height=128;
  const ctx=c.getContext("2d");ctx.fillStyle=theme==="clinic"?"#7b8581":theme==="market"?"#675b49":"#55534b";ctx.fillRect(0,0,128,128);
@@ -151,7 +176,7 @@ function proceduralSurface(base,seed=1,repeatX=2,repeatY=1){
 function wornSurface(base,seed=1,x=2,y=1){return new THREE.MeshStandardMaterial({map:proceduralSurface(base,seed,x,y),roughness:.95});}
 function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safehouse"}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
- const tile=matUnique(0xffffff);tile.map=interiorFloorTexture(w,d,theme);tile.needsUpdate=true;
+ const tile=matUnique(0xffffff);tile.map=theme==="clinic"?referenceClinicFloor():interiorFloorTexture(w,d,theme);tile.needsUpdate=true;
  // Lift interior finish above the base world ground to eliminate coplanar depth fighting.
  box(cx,.057,cz,w,.028,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
@@ -231,6 +256,44 @@ function makeWorld(){
  for(let x of [34,55])box(x,3.66,-12.54,5.5,.20,.09,mat(0x4b6d71));
  box(44,.12,-12.3,8,.03,.65,mat(0xc1bb9f));
  const redCross=label("+",2.6,2.3,"#e7ded5","#ab3732",140);redCross.position.set(45,6.45,-12.8);world.add(redCross);
+ // Reference-guided interior: grimy off-white upper wall, deep hospital teal belt and gray kick panel.
+ // All panels are decorative; collision still uses the original solid house walls.
+ const clinicTeal=wornSurface(0x1e4d4f,427,1,1),clinicUpper=wornSurface(0xa8aca1,428,1,1);
+ const clinicLower=mat(0x747b78),trim=mat(0x272f2c),door=mat(0x4b696b,.82);
+ for(const [y,h,material] of [[.52,1.0,clinicLower],[2.08,2.15,clinicTeal],[4.09,1.64,clinicUpper]]){
+  box(45,y,-38.59,29.3,h,.075,material);
+  box(29.91,y,-26,.075,h,24.3,material);
+  box(60.09,y,-26,.075,h,24.3,material);
+ }
+ box(45,1.0,-38.50,29.3,.075,.095,trim);
+ box(45,3.18,-38.50,29.3,.085,.095,trim);
+ // Central gray steel door, deep frame, threshold and brass pull.
+ box(44,1.63,-38.36,3.6,3.18,.17,trim);
+ box(44,1.58,-38.22,3.22,2.94,.11,door);
+ box(44,2.43,-38.135,1.3,.44,.032,mat(0x32494b));
+ box(45.16,1.58,-38.12,.12,.34,.08,mat(0xb7a178,.46,.72));
+ box(44,.15,-37.91,3.65,.07,.62,mat(0x383c38));
+ for(const [x,name] of [[36.3,"01 / SUPPLIES"],[54.1,"02 / FIELD MEDIC"]]){
+  const sign=label(name,5.8,.62,"#323b36","#e5d7a3",58);
+  sign.position.set(x,3.33,-38.39);world.add(sign);
+ }
+ const access=label("TRIAGE ACCESS",3.1,.52,"#313e3e","#d8cfab",58);
+ access.position.set(44,3.55,-38.26);world.add(access);
+ // Suspended long fluorescent with white emissive core and olive metal housing.
+ box(45,4.79,-29,7.0,.18,.72,mat(0x414743,.72,.13));
+ const ceilingGlow=matUnique(0xecebd0,.58);
+ ceilingGlow.emissive=new THREE.Color(0xd6f4c4);ceilingGlow.emissiveIntensity=1.25;
+ box(45,4.66,-29,6.45,.055,.50,ceilingGlow);
+ // Triage counter and red first aid container on the right.
+ box(56,1.04,-32.8,5.0,2.0,1.85,mat(0x4c4437));
+ box(56,2.09,-32.8,5.15,.13,2.02,mat(0x8a7960));
+ box(56.8,2.4,-32.9,.77,.49,.58,mat(0x932b2b));
+ box(56.8,2.69,-32.6,.15,.31,.035,mat(0xe4dfcf));
+ box(56.8,2.69,-32.6,.42,.095,.04,mat(0xe4dfcf));
+ // Low-cost dropped rubble to break up the perfectly clean floor without blocking the mission corridor.
+ const rubbleMat=mat(0x8d816a),paperMat=mat(0xaaa48d);
+ instanced(24,rubbleMat,i=>({x:32+(i*17%26),y:.123,z:-36+(i*11%21),w:.11+(i%4)*.065,h:.048,d:.17+(i%3)*.04,rot:i*.61}));
+ instanced(10,paperMat,i=>({x:33+(i*7%25),y:.119,z:-34+(i*5%19),w:.34,h:.015,d:.23,rot:i*.8}));
  // Clinic wayfinding
  for(let z of [-30,-22]){const strip=box(43,.089,z,15,.014,.15,mat(0x9bafad));}
  for(let x of [34,53]){for(let z of [-33,-24]){box(x,.42,z,3,.8,1,mat(0x697b79),true);
