@@ -233,10 +233,33 @@ function makeCar(x,z,color,police=false){
   const policeSign=label("ASHFORD COUNTY",2.7,.47,"#2c3033","#cfd4d4",58);policeSign.rotation.y=Math.PI/2;policeSign.position.set(.2,.75,1.075);car.add(policeSign);}
 }
 function makeTree(x,z){cyl(x,1.35,z,.25,2.7,mat(0x55483a));for(let i=0;i<3;i++)sphere(x+rand(-.6,.6),3.2+rand(-.3,.7),z+rand(-.5,.5),rand(.9,1.5),mat([0x47574d,0x59604b,0x3d4c45][i]));}
-function plaidTexture(){const c=document.createElement("canvas");c.width=c.height=128;const ctx=c.getContext("2d");ctx.fillStyle="#565456";ctx.fillRect(0,0,128,128);
- for(let n=0;n<128;n+=32){ctx.fillStyle="#793c36";ctx.fillRect(n,0,13,128);ctx.fillRect(0,n,128,13);}
- for(let n=0;n<128;n+=16){ctx.fillStyle="#2d3b46aa";ctx.fillRect(n,0,4,128);ctx.fillRect(0,n,128,4);}
- const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+function plaidTexture(){
+ const c=document.createElement("canvas");c.width=c.height=256;
+ const ctx=c.getContext("2d");
+ ctx.fillStyle="#535657";ctx.fillRect(0,0,256,256);
+ // Slightly faded red-and-charcoal plaid; all fabric detail stays in one texture.
+ for(let n=0;n<256;n+=64){
+  ctx.fillStyle="#713f3d";ctx.fillRect(n,0,26,256);ctx.fillRect(0,n,256,26);
+  ctx.fillStyle="rgba(30,36,42,.42)";
+  ctx.fillRect(n+28,0,7,256);ctx.fillRect(0,n+28,256,7);
+ }
+ for(let n=0;n<256;n+=32){
+  ctx.fillStyle="#29394188";ctx.fillRect(n,0,4,256);ctx.fillRect(0,n,256,4);
+ }
+ for(let i=0;i<3200;i++){
+  const x=rand(0,256),y=rand(0,256);
+  ctx.fillStyle=i%3===0?"rgba(208,184,150,.095)":"rgba(13,14,17,.095)";
+  ctx.fillRect(x,y,rand(.3,1.8),rand(.3,1.7));
+ }
+ for(let i=0;i<32;i++){
+  const x=rand(0,256),y=rand(0,256);
+  ctx.strokeStyle="rgba(17,23,23,.15)";ctx.lineWidth=rand(.5,2.5);
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+rand(-17,17),y+rand(-4,4));ctx.stroke();
+ }
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+ t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return t;
+}
 const plaidMat=new THREE.MeshStandardMaterial({map:plaidTexture(),roughness:.98});
 function humanoid(kind="player"){
  const group=new THREE.Group();
