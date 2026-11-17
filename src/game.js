@@ -9,7 +9,16 @@ const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
 const rand = (a,b)=>a+Math.random()*(b-a);
 const dist = (a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
-const mat=(color,rough=.88,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});
+// Cache immutable opaque PBR materials. Use matUnique for local textures/emissive changes.
+const materialCache=new Map();
+function mat(color,rough=.88,metal=0){
+ const key=color+"|"+rough+"|"+metal;
+ let material=materialCache.get(key);
+ if(!material){material=new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});materialCache.set(key,material);}
+ return material;
+}
+function matUnique(color,rough=.88,metal=0){return new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});}
+function materialCacheHas(material){for(const item of materialCache.values()){if(item===material)return true;}return false;}
 const coal=mat(0x21282a), asphalt=mat(0x292c2d), concrete=mat(0x555b57), dust=mat(0x7a7060), brick=mat(0x5f5551), panel=mat(0x6c726d), glass=mat(0x39595a,.25,.15), dark=mat(0x1b2225);
 const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,emissiveIntensity:.5,roughness:.3});
 const scene=new THREE.Scene();
@@ -56,6 +65,8 @@ const cameraRay=new THREE.Raycaster();
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
 const unitCube=new THREE.BoxGeometry(1,1,1);
+const unitSphere=new THREE.SphereGeometry(1,10,8);
+const unitCylinder=new THREE.CylinderGeometry(1,1,1,9);
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function instanced(count,material,transform){
  const group=new THREE.InstancedMesh(unitCube,material,count);
@@ -70,8 +81,8 @@ function instanced(count,material,transform){
  group.instanceMatrix.needsUpdate=true;group.castShadow=false;group.receiveShadow=false;
  world.add(group);return group;
 }
-function cyl(x,y,z,r,depth,material,group=world){const m=mesh(new THREE.CylinderGeometry(r,r,depth,9),material,x,y,z,group);m.castShadow=true;return m}
-function sphere(x,y,z,r,material,group=world){const m=mesh(new THREE.SphereGeometry(r,10,8),material,x,y,z,group);m.castShadow=true;return m}
+function cyl(x,y,z,r,depth,material,group=world){const m=mesh(unitCylinder,material,x,y,z,group);m.scale.set(r,depth,r);m.castShadow=true;return m}
+function sphere(x,y,z,r,material,group=world){const m=mesh(unitSphere,material,x,y,z,group);m.scale.setScalar(r);m.castShadow=true;return m}
 function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);return l}
 function label(text,w=9,h=1.9,bg="#121a1c",fg="#e3c18b",size=50){
  const c=document.createElement("canvas");c.width=1024;c.height=256;const ctx=c.getContext("2d");ctx.fillStyle=bg;ctx.fillRect(0,0,1024,256);
@@ -112,7 +123,7 @@ function interiorFloorTexture(w,d){
 }
 function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
- const tile=mat(0xffffff);tile.map=interiorFloorTexture(w,d);tile.needsUpdate=true;
+ const tile=matUnique(0xffffff);tile.map=interiorFloorTexture(w,d);tile.needsUpdate=true;
  floor(cx,cz,w,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
  wall(left,cz,.7,d,4.9,color);wall(right,cz,.7,d,4.9,color);
@@ -141,7 +152,7 @@ function makeWorld(){
  // Safehouse
  house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:mat(0x505452)});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
- const safeLamp=box(-48,4.42,-25,2.5,.17,.52,mat(0xf3d7a3));
+ const safeLamp=box(-48,4.42,-25,2.5,.17,.52,matUnique(0xf3d7a3));
  safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
  addLight(-48,3.7,-24,0xffd1a0,7,20);
  box(-54,.62,-30,3,1.2,2,dark,true);box(-40,.6,-32,1.8,1.1,1.6,mat(0x6a5844));
@@ -177,7 +188,7 @@ function makeWorld(){
  box(-7,.5,-29,1.3,1,1.3,mat(0x6b6049));box(-7,1.03,-29,1.35,.11,1.35,mat(0xa28a5b));
  addLight(-15,4.15,-27,0xffb16d,9,23);
  addLight(-5,4,-21,0xb77d44,4,15);
- for(let z of [-20,-33]){const fixture=box(-11,4.45,z,3,.18,.4,mat(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
+ for(let z of [-20,-33]){const fixture=box(-11,4.45,z,3,.18,.4,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
  house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:mat(0x768080)});
  const clinicSign=label("ASHFORD CLINIC",20,2.15,"#253b43","#b8dce0",75);clinicSign.position.set(45,4.4,-12.65);world.add(clinicSign);
@@ -203,7 +214,7 @@ function makeWorld(){
    cyl(x,2.15,-32,.24,.11,medTrim);}
  // privacy curtains near medical beds
  for(let x of [36,54]){const curtain=box(x,2.7,-31,.07,2.65,5,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
- for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,mat(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
+ for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,matUnique(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
  addLight(44,4,-24,0xaddde2,6,22);addLight(54,3.8,-32,0xa7def0,4,15);
  const ward=label("WARD B   /   TRIAGE",10,1.1,"#37565d","#e1e6df",48);ward.position.set(46,2.7,-38.52);world.add(ward);
  // Patrol car, street debris and reflective safety cones form a readable landmark.
@@ -268,7 +279,7 @@ function humanoid(kind="player"){
  const skin=mat(zombie?0x8c9783:kind==="mara"?0xc39e80:0xb8a18b);
  const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xc5d1c9):kind==="runner"?mat(0x4e6665):kind==="brute"?mat(0x5e524c):kind==="spitter"?mat(0x62745b):mat(0x60635e);
  const pants=mat(zombie?0x48473f:kind==="vale"?0x4d616c:0x39444a);
- const torso=box(0,1.61,0,.85,1.0,.48,fabric,false,group);
+ const torso=box(0,1.61,0,.85,1.0,.48,zombie?fabric.clone():fabric,false,group);
  box(0,1.11,0,.72,.18,.43,pants,false,group);
  const head=sphere(0,2.42,-.01,.33,skin,group);
  const hair=box(0,2.68,.0,.54,.15,.5,mat(zombie?0x42483e:0x302d29),false,group);
@@ -300,7 +311,7 @@ function humanoid(kind="player"){
  if(kind==="vale"){box(0,1.36,-.28,.52,.75,.07,mat(0xe1e4da),false,group);box(0,1.49,-.35,.09,.3,.07,mat(0x35727b),false,group);}
  if(kind==="mara"){box(0,1.65,-.29,.60,.74,.12,mat(0x473f37),false,group);}
  if(kind==="brute"){
-  group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x=1.12;
+  group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x*=1.12;
   const bulk=mat(0x655e54);
   for(const side of [-1,1]){sphere(side*.62,2.02,.02,.38,bulk,group);box(side*.60,1.63,.20,.20,.48,.20,bulk,false,group);}
  }
@@ -567,7 +578,7 @@ function updateEffects(dt){
   if(blocked(nx,nz,.22)){e.life=0;}else{e.mesh.position.x=nx;e.mesh.position.z=nz;
     if(dist({x:nx,z:nz},pos())<.8){takeDamage(e.damage||10);e.life=0;}}}
  if(e.mesh.material&&"opacity"in e.mesh.material)e.mesh.material.opacity=clamp(e.life/e.total,0,1)*.9;
- if(e.life<=0){world.remove(e.mesh);if(e.mesh.geometry)e.mesh.geometry.dispose();effects.splice(i,1);}
+ if(e.life<=0){world.remove(e.mesh);if(e.mesh.geometry&&e.mesh.geometry!==unitSphere&&e.mesh.geometry!==unitCylinder&&e.mesh.geometry!==unitCube)e.mesh.geometry.dispose();if(e.mesh.material&&!materialCacheHas(e.mesh.material))e.mesh.material.dispose();effects.splice(i,1);}
  }
 }
 function hud(){
