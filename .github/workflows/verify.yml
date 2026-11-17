@@ -25,6 +25,8 @@ jobs:
         run: npm run test:browser
       - name: Keyboard-controlled opening-route test
         run: npm run test:route
+      - name: Mobile viewport and touch-control test
+        run: npm run test:mobile
       - name: Attach browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
