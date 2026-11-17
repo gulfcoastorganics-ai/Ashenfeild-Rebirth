@@ -1,5 +1,6 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
 import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,findPath as findRoute,restoreCheckpoint} from "./nav.mjs";
+import {WEAPONS,INFECTED,chooseTarget,applyHit,chooseInfectedAction,attackStillValid} from "./combat.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -32,7 +33,7 @@ const state={
  started:false,paused:true,ended:false,stage:0,health:100,stamina:100,thirst:80,hunger:80,
  ammo:0,mag:12,hasGun:false,supplies:0,kills:0,waveKills:0,waveStarted:false,waveTimer:0,
  x:-48,z:-24,angle:Math.PI,weapon:"crowbar",inventory:{water:1,food:2,bandage:1},
- time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0
+ time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0,hitConfirm:0,cameraKick:0,meleeAnim:0,pistolAnim:0
 };
 const stages=[
  {title:"Exit the barricaded house",desc:"Make your way outside. The street is quiet—too quiet.",point:{x:-47,z:-11},kind:"arrive",radius:2.4},
@@ -297,10 +298,10 @@ function humanoid(kind="player"){
 function createNPC(kind,x,z,angle){const c=humanoid(kind);c.position.set(x,0,z);c.rotation.y=angle;world.add(c);return c;}
 function spawnEnemy(type,x,z,ambush=false){
  const c=humanoid(type);c.position.set(x,0,z);world.add(c);
- enemies.push({type,mesh:c,x,z,hp:type==="brute"?175:type==="runner"?52:75,max:type==="brute"?175:type==="runner"?52:75,
- speed:type==="runner"?4.25:type==="brute"?1.6:type==="spitter"?1.9:2.25,
- cd:rand(.1,1.0),phase:rand(0,10),dead:false,death:0,ambush,
- route:[],routeTimer:rand(.05,.45),routeTarget:{x:NaN,z:NaN}});
+ const spec=INFECTED[type]||INFECTED.walker;
+ enemies.push({type,mesh:c,x,z,hp:spec.health,max:spec.health,speed:spec.speed,
+  cd:rand(.5,1.2),phase:rand(0,10),dead:false,death:0,ambush,
+  attackIntent:null,windup:0,hitFlash:0,stagger:0,route:[],routeTimer:rand(.05,.45),routeTarget:{x:NaN,z:NaN}});
 }
 function spawnAmbient(){spawnEnemy("walker",-27,3);spawnEnemy("runner",5,13);spawnEnemy("spitter",32,11);}
 function makeMarker(){
@@ -345,28 +346,54 @@ function startWave(){state.waveStarted=true;state.waveKills=0;state.waveTimer=0;
 function victory(){state.ended=true;state.paused=true;$("end-label").textContent="OPENING ROUTE CLEARED";$("end-title").textContent="FIRST NIGHT SURVIVED.";$("end-message").textContent="You reached the ward, found allies, and secured Ashford Clinic. This is the end of the reconstruction opening slice.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(680,.6);}
 function gameOver(){state.ended=true;state.paused=true;$("end-label").textContent="SIGNAL LOST";$("end-title").textContent="YOU DID NOT SURVIVE.";$("end-message").textContent="The dead claimed another survivor. Return to the start and try again.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(125,.6,"sawtooth",.08);}
 function takeDamage(amount){if(state.qaNoDamage||state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
-function melee(){if(state.attackTime>0||!state.started||state.paused)return;state.attackTime=.56;tone(175,.1,"triangle",.06);
- const p=pos();const facing=aimDirection();const target=enemies.filter(e=>!e.dead&&dist(e,p)<2.9)
- .filter(e=>V(e.x-p.x,0,e.z-p.z).normalize().dot(facing)>.22&&!lineBlocked(p.x,p.z,e.x,e.z,.11))
- .sort((a,b)=>dist(a,p)-dist(b,p))[0];if(target)hurtEnemy(target,55);
- const dir=facing;
- const slash=mesh(new THREE.TorusGeometry(1.15,.045,5,25,Math.PI*.86),new THREE.MeshBasicMaterial({color:0xe9d6b6,transparent:true,opacity:.84}),state.x+dir.x*.8,1.5,state.z+dir.z*.8,world);
- slash.rotation.set(.35,-state.angle,0);effects.push({mesh:slash,life:.24,total:.24,kind:"fade"});}
-function shoot(){if(!state.started||state.paused||state.shootTime>0)return;if(!state.hasGun){toast("FIND A FIREARM FIRST");return;}if(state.ammo<=0){toast("OUT OF AMMO — USE MELEE");tone(180,.05);return;}state.ammo--;state.shootTime=.29;
+function confirmHit(killed=false){
+ state.hitConfirm=killed?.38:.22;
+ const marker=$("crosshair");marker.classList.remove("hit","kill");void marker.offsetWidth;
+ marker.classList.add(killed?"kill":"hit");
+}
+function melee(){
+ if(state.attackTime>0||!state.started||state.paused)return;
+ state.attackTime=WEAPONS.crowbar.cooldown;state.meleeAnim=WEAPONS.crowbar.cooldown;
+ tone(175,.1,"triangle",.06);
+ const p=pos(),facing=aimDirection();
+ const target=chooseTarget(p,{x:facing.x,z:facing.z},enemies,"crowbar",obstacles);
+ if(target)hurtEnemy(target,WEAPONS.crowbar.damage,"crowbar");
+ const slash=mesh(new THREE.TorusGeometry(1.15,.045,5,25,Math.PI*.86),
+  new THREE.MeshBasicMaterial({color:0xe9d6b6,transparent:true,opacity:.84}),
+  state.x+facing.x*.8,1.5,state.z+facing.z*.8,world);
+ slash.rotation.set(.35,-state.angle,0);
+ effects.push({mesh:slash,life:.24,total:.24,kind:"fade"});
+}
+function shoot(){
+ if(!state.started||state.paused||state.shootTime>0)return;
+ if(!state.hasGun){toast("FIND A FIREARM FIRST");return;}
+ if(state.ammo<=0){toast("OUT OF AMMO — USE MELEE");tone(180,.05);return;}
+ state.ammo--;state.shootTime=WEAPONS.pistol.cooldown;
+ state.pistolAnim=.28;state.cameraKick=Math.max(state.cameraKick,.18);
  tone(65,.25,"sawtooth",.17);tone(340,.06,"triangle",.08);
  const facing=aimDirection();
- const target=enemies.filter(e=>!e.dead&&dist(pos(),e)<26).map(e=>{const d=V(e.x-state.x,0,e.z-state.z).normalize();return {e,aim:d.dot(facing),range:dist(pos(),e)};})
- .filter(t=>t.aim>.94&&!lineBlocked(state.x,state.z,t.e.x,t.e.z,.15)).sort((a,b)=>b.aim-a.aim||a.range-b.range)[0];
+ const target=chooseTarget(pos(),{x:facing.x,z:facing.z},enemies,"pistol",obstacles);
  const src=V(state.x+facing.x*.7,1.75,state.z+facing.z*.7);
- const end=target?V(target.e.x,1.7,target.e.z):src.clone().add(facing.multiplyScalar(24));
- if(target)hurtEnemy(target.e,68);
- const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([src,end]),new THREE.LineBasicMaterial({color:0xf9d38e,transparent:true,opacity:.95}));
+ const end=target?V(target.x,1.7,target.z):src.clone().addScaledVector(facing,24);
+ if(target)hurtEnemy(target,WEAPONS.pistol.damage,"pistol");
+ const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([src,end]),
+  new THREE.LineBasicMaterial({color:0xf9d38e,transparent:true,opacity:.95}));
  world.add(line);effects.push({mesh:line,life:.12,total:.12,kind:"fade"});
- const flash=sphere(src.x,src.y,src.z,.23,new THREE.MeshBasicMaterial({color:0xffde8c,transparent:true,opacity:1}));effects.push({mesh:flash,life:.09,total:.09,kind:"fade"});
+ const flash=sphere(src.x,src.y,src.z,.23,new THREE.MeshBasicMaterial({color:0xffde8c,transparent:true,opacity:1}));
+ effects.push({mesh:flash,life:.09,total:.09,kind:"fade"});
 }
-function hurtEnemy(e,dmg){e.hp-=dmg;tone(330,.07,"square",.035);e.mesh.scale.multiplyScalar(.99);
- if(e.hp<=0){e.dead=true;e.death=1.7;state.kills++;if(state.waveStarted&&e.ambush){state.waveKills++;toast("INFECTED NEUTRALIZED "+state.waveKills+" / 4");}
- if(state.stage===7&&state.waveKills>=4){state.waveStarted=false;advance();}}}
+function hurtEnemy(e,damage,weapon="pistol"){
+ if(e.dead||e.hp<=0)return;
+ const hit=applyHit(e.hp,damage);e.hp=hit.health;
+ e.hitFlash=.18;e.stagger=e.type==="brute"?.13:.22;
+ tone(330,.07,"square",.035);confirmHit(hit.killed);
+ if(!hit.killed)return;
+ e.dead=true;e.death=1.7;e.attackIntent=null;state.kills++;
+ if(state.waveStarted&&e.ambush){
+  state.waveKills++;toast("INFECTED NEUTRALIZED "+state.waveKills+" / 4");
+ }
+ if(state.stage===7&&state.waveKills>=4){state.waveStarted=false;advance();}
+}
 function updateEnemies(dt){
  const p=pos();
  for(let i=enemies.length-1;i>=0;i--){
