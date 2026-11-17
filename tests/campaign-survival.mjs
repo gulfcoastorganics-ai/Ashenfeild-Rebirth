@@ -35,12 +35,12 @@ try{
  const wait=ms=>page.waitForTimeout(ms);
  function angleDiff(a,b){return Math.atan2(Math.sin(a-b),Math.cos(a-b));}
  const ensureAlive=async label=>{const s=await snap();assert(!s.ended&&s.health>0,"Player died during "+label+" at "+JSON.stringify(s));return s;};
- async function aimAt(x,z){
+ async function aimAt(x,z,tolerance=.13){
   for(let i=0;i<18;i++){
    const p=await ensureAlive("aim");
    const yaw=Math.atan2(-(x-p.x),-(z-p.z));
    const err=angleDiff(yaw,p.cameraYaw);
-   if(Math.abs(err)<.13)return;
+   if(Math.abs(err)<tolerance)return;
    const key=err>0?"q":"r";
    await page.keyboard.down(key);
    await wait(Math.max(100,Math.min(440,Math.abs(err)/2.8*800)));
@@ -125,9 +125,16 @@ try{
  assert.equal(post.waveKills,4);
  assert(shots>0,"No attacks fired");
  console.log("CAMPAIGN PASS real clinic defense; HP "+startedHP.toFixed(1)+" -> "+post.health.toFixed(1)+" shots="+shots+" dodges="+dodges+" heals="+heals);
- // Aim is now free; restore the original camera heading before movement.
- await aimAt(44,10);
- await to(44,-15.1);
+ // Move toward the gate by normal camera-relative controls. Do not require
+ // an exact world heading after combat: at low FPS keyboard rotation is quantized.
+ for(let n=0;n<32;n++){
+  const q=await ensureAlive("gate approach"),d=Math.hypot(q.x-44,q.z+15);
+  if(d<3.3)break;
+  await aimAt(44,-15,.44);
+  await page.keyboard.down("w");await wait(270);await page.keyboard.up("w");
+ }
+ const atGate=await ensureAlive("final gate");
+ assert(Math.hypot(atGate.x-44,atGate.z+15)<3.8,"Could not walk to clinic gate: "+JSON.stringify(atGate));
  await page.keyboard.press("e");
  await page.waitForFunction(()=>window.__ashfordQA.snapshot().ended,null,{timeout:12000});
  assert((await page.locator("#end-title").innerText()).includes("FIRST NIGHT"),"Victory screen missing");
