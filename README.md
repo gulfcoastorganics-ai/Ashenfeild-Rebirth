@@ -4,6 +4,25 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.8 — Screenshot-Reference Visual Overhaul
+
+**Reference:** User-supplied ChromeOS screenshot of the *original* Ashford 3D clinic, used only for composition and styling guidance. This is still a separate, original-code reconstruction—not an export of the Sites v7.1 game, its models, or its animation rigs.
+
+- Recreated the **clinic's recognizably cinematic composition**: worn gray/cream checkerboard floor, teal middle wall band, off-white upper wall, lower concrete skirting, central steel door, supply/medic directional labels, overhead fluorescent tube and triage counter.
+- Preserved solid collision, original world coordinates and stage triggers. Environmental dressing is visual-only.
+- Updated the **survivor silhouette** with fitted red-black plaid, tapered jacket, brown trousers and a green structured backpack with straps, pockets and metal hardware.
+- Added a non-interactive blue-shirted **clinic guard** beside a refined Dr. Vale NPC, approximating the reference's two-survivor composition without changing dialogue.
+- Pulled the third-person camera in for a more expressive over-the-shoulder view.
+- Corrected screenshot-review occlusion from near-camera ceiling fixtures and moved clinic curtains to the side wards; reshaped heads toward human proportions.
+- Improved the **Graphics: Performance** fallback so low-FPS browsers with device-pixel ratio 1 also reduce rendering cost, including 0.85 resolution scale and disabled shadows.
+- Reorganized the HUD around compact **health/stamina**, a left-side **field objective**, top-right **day/weather-survival readout**, functional **LIGHT** toggle (L), and a bottom-right **weapon card**, retaining mobile and inventory controls.
+- No paid models, external textures, new skeletons or production deployment.
+
+### Tests
+Run \`npm run check\`, \`npm run test:reference\`, \`npm run test:visual\`, \`npm run test:campaign\`, \`npm run test:route\`, \`npm run test:mobile\` and \`npm run test:combat\`. V0.8 CI captures \`artifacts/v08-reference-clinic.png\` and \`v08-reference-market.png\`.
+
+**Performance:** The cinematic layout is a visual approximation—not a claim of AAA photorealism. Rendering tests use headless Chromium/SwiftShader. Real Chromebook/Android/iPhone hardware must be profiled separately.
+
 ## V0.7 — Visual Fidelity & GPU Optimization
 
 V0.7 improves the **independent reconstruction**, not the inaccessible original Sites source.

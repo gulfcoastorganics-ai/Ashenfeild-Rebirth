@@ -24,7 +24,7 @@ const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,e
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x252e32);
 scene.fog=new THREE.FogExp2(0x2e393c,.013);
-const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,210);
+const camera=new THREE.PerspectiveCamera(64,innerWidth/innerHeight,.1,210);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
 renderer.setSize(innerWidth,innerHeight);
@@ -58,10 +58,24 @@ const stages=[
  {title:"Secure the clinic entrance",desc:"Return to the front doors and secure the clinic gate.",point:{x:44,z:-15},kind:"interact",name:"CLINIC GATE"}
 ];
 const keys={},touch={x:0,y:0,sprint:false};
-let cameraYaw=Math.PI,cameraPitch=.56,lastPointer=null,activeDialog=false;
+let cameraYaw=Math.PI,cameraPitch=.39,lastPointer=null,activeDialog=false;
 let qualityMode="auto";
 const solidMeshes=[];
 const cameraRay=new THREE.Raycaster();
+const fieldFlashlight=new THREE.SpotLight(0xe0e6c4,4.2,24,Math.PI/6,.52,1.8);
+fieldFlashlight.castShadow=false;fieldFlashlight.visible=false;scene.add(fieldFlashlight);
+const fieldFlashlightTarget=new THREE.Object3D();scene.add(fieldFlashlightTarget);
+fieldFlashlight.target=fieldFlashlightTarget;
+let flashlightOn=false;
+function toggleFlashlight(){
+ if(!state.started||state.ended)return;
+ flashlightOn=!flashlightOn;
+ fieldFlashlight.visible=flashlightOn;
+ $("light-button").setAttribute("aria-pressed",String(flashlightOn));
+ $("light-button").textContent=flashlightOn?"LIGHT ON":"LIGHT";
+ tone(flashlightOn?410:200,.055,"triangle",.04);
+}
+
 
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
@@ -69,7 +83,8 @@ const unitCube=new THREE.BoxGeometry(1,1,1);
 const unitSphere=new THREE.SphereGeometry(1,10,8);
 const unitCylinder=new THREE.CylinderGeometry(1,1,1,9);
 const sleeveGeometry=new THREE.CylinderGeometry(.15,.18,.8,8);
-const trouserGeometry=new THREE.CylinderGeometry(.16,.19,.87,8);
+const trouserGeometry=new THREE.CylinderGeometry(.17,.19,.87,9);
+const jacketTorsoGeometry=new THREE.CylinderGeometry(.49,.35,1.05,10);
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function instanced(count,material,transform,geometry=unitCube){
  const group=new THREE.InstancedMesh(geometry,material,count);
@@ -120,6 +135,31 @@ function gritTexture(){
 }
 function wall(x,z,w,d,h,material=brick){return box(x,h/2,z,w,h,d,material,true)}
 function floor(x,z,w,d,material){return box(x,.025,z,w,.05,d,material)}
+function referenceClinicFloor(){
+ const c=document.createElement("canvas");c.width=c.height=512;
+ const ctx=c.getContext("2d");
+ let seed=0x8173a21;const noise=()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296;};
+ const size=256;
+ for(let row=0;row<2;row++)for(let col=0;col<2;col++){
+  const x=col*size,y=row*size,light=(col+row)%2===0;
+  ctx.fillStyle=light?"#a7a79d":"#575b58";ctx.fillRect(x,y,size,size);
+  ctx.fillStyle="rgba(17,20,21,.28)";ctx.fillRect(x,y,3,size);ctx.fillRect(x,y,size,3);
+  for(let k=0;k<1700;k++){
+   const px=x+noise()*size,py=y+noise()*size;
+   ctx.fillStyle=noise()>.56?"rgba(30,33,29,.085)":"rgba(216,204,178,.07)";
+   const l=.3+noise()*5;ctx.fillRect(px,py,l,l*(.2+noise()));
+  }
+  for(let k=0;k<11;k++){
+   const px=x+noise()*size,py=y+noise()*size;
+   ctx.strokeStyle="rgba(21,24,21,.12)";ctx.lineWidth=.5+noise()*2;
+   ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+(noise()-.5)*26,py+(noise()-.5)*20);ctx.stroke();
+  }
+ }
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+ t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(31/3.6,26/3.6);
+ t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return t;
+}
 function interiorFloorTexture(w,d,theme="safehouse"){
  const c=document.createElement("canvas");c.width=c.height=128;
  const ctx=c.getContext("2d");ctx.fillStyle=theme==="clinic"?"#7b8581":theme==="market"?"#675b49":"#55534b";ctx.fillRect(0,0,128,128);
@@ -151,7 +191,7 @@ function proceduralSurface(base,seed=1,repeatX=2,repeatY=1){
 function wornSurface(base,seed=1,x=2,y=1){return new THREE.MeshStandardMaterial({map:proceduralSurface(base,seed,x,y),roughness:.95});}
 function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safehouse"}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
- const tile=matUnique(0xffffff);tile.map=interiorFloorTexture(w,d,theme);tile.needsUpdate=true;
+ const tile=matUnique(0xffffff);tile.map=theme==="clinic"?referenceClinicFloor():interiorFloorTexture(w,d,theme);tile.needsUpdate=true;
  // Lift interior finish above the base world ground to eliminate coplanar depth fighting.
  box(cx,.057,cz,w,.028,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
@@ -181,7 +221,7 @@ function makeWorld(){
  // Safehouse
  house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:wornSurface(0x505452,121),theme:"safehouse"});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
- const safeLamp=box(-48,4.42,-25,2.5,.17,.52,matUnique(0xf3d7a3));
+ const safeLamp=box(-49,4.73,-19.2,1.9,.13,.38,matUnique(0xf3d7a3));
  safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
  addLight(-48,3.7,-24,0xffd1a0,7,20);
  box(-54,.62,-30,3,1.2,2,dark,true);box(-40,.6,-32,1.8,1.1,1.6,mat(0x6a5844));
@@ -223,7 +263,7 @@ function makeWorld(){
  box(-7,.5,-29,1.3,1,1.3,mat(0x6b6049));box(-7,1.03,-29,1.35,.11,1.35,mat(0xa28a5b));
  addLight(-15,4.15,-27,0xffb16d,9,23);
  addLight(-5,4,-21,0xb77d44,4,15);
- for(let z of [-20,-33]){const fixture=box(-11,4.45,z,3,.18,.4,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
+ for(let z of [-27,-34]){const fixture=box(-11,4.70,z,2.35,.14,.31,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
  house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:wornSurface(0x768080,331),theme:"clinic"});
  const clinicSign=label("ASHFORD CLINIC",20,2.15,"#253b43","#b8dce0",75);clinicSign.position.set(45,4.4,-12.65);world.add(clinicSign);
@@ -231,6 +271,44 @@ function makeWorld(){
  for(let x of [34,55])box(x,3.66,-12.54,5.5,.20,.09,mat(0x4b6d71));
  box(44,.12,-12.3,8,.03,.65,mat(0xc1bb9f));
  const redCross=label("+",2.6,2.3,"#e7ded5","#ab3732",140);redCross.position.set(45,6.45,-12.8);world.add(redCross);
+ // Reference-guided interior: grimy off-white upper wall, deep hospital teal belt and gray kick panel.
+ // All panels are decorative; collision still uses the original solid house walls.
+ const clinicTeal=wornSurface(0x1e4d4f,427,1,1),clinicUpper=wornSurface(0xa8aca1,428,1,1);
+ const clinicLower=mat(0x747b78),trim=mat(0x272f2c),door=mat(0x4b696b,.82);
+ for(const [y,h,material] of [[.52,1.0,clinicLower],[2.08,2.15,clinicTeal],[4.09,1.64,clinicUpper]]){
+  box(45,y,-38.59,29.3,h,.075,material);
+  box(29.91,y,-26,.075,h,24.3,material);
+  box(60.09,y,-26,.075,h,24.3,material);
+ }
+ box(45,1.0,-38.50,29.3,.075,.095,trim);
+ box(45,3.18,-38.50,29.3,.085,.095,trim);
+ // Central gray steel door, deep frame, threshold and brass pull.
+ box(44,1.63,-38.36,3.6,3.18,.17,trim);
+ box(44,1.58,-38.22,3.22,2.94,.11,door);
+ box(44,2.43,-38.135,1.3,.44,.032,mat(0x32494b));
+ box(45.16,1.58,-38.12,.12,.34,.08,mat(0xb7a178,.46,.72));
+ box(44,.15,-37.91,3.65,.07,.62,mat(0x383c38));
+ for(const [x,name] of [[36.3,"01 / SUPPLIES"],[54.1,"02 / FIELD MEDIC"]]){
+  const sign=label(name,5.8,.62,"#323b36","#e5d7a3",58);
+  sign.position.set(x,3.33,-38.39);world.add(sign);
+ }
+ const access=label("TRIAGE ACCESS",3.1,.52,"#313e3e","#d8cfab",58);
+ access.position.set(44,3.55,-38.26);world.add(access);
+ // Suspended long fluorescent with white emissive core and olive metal housing.
+ box(45,4.79,-29,7.0,.18,.72,mat(0x414743,.72,.13));
+ const ceilingGlow=matUnique(0xecebd0,.58);
+ ceilingGlow.emissive=new THREE.Color(0xd6f4c4);ceilingGlow.emissiveIntensity=1.25;
+ box(45,4.66,-29,6.45,.055,.50,ceilingGlow);
+ // Triage counter and red first aid container on the right.
+ box(56,1.04,-32.8,5.0,2.0,1.85,mat(0x4c4437));
+ box(56,2.09,-32.8,5.15,.13,2.02,mat(0x8a7960));
+ box(56.8,2.4,-32.9,.77,.49,.58,mat(0x932b2b));
+ box(56.8,2.69,-32.6,.15,.31,.035,mat(0xe4dfcf));
+ box(56.8,2.69,-32.6,.42,.095,.04,mat(0xe4dfcf));
+ // Low-cost dropped rubble to break up the perfectly clean floor without blocking the mission corridor.
+ const rubbleMat=mat(0x8d816a),paperMat=mat(0xaaa48d);
+ instanced(24,rubbleMat,i=>({x:32+(i*17%26),y:.123,z:-36+(i*11%21),w:.11+(i%4)*.065,h:.048,d:.17+(i%3)*.04,rot:i*.61}));
+ instanced(10,paperMat,i=>({x:33+(i*7%25),y:.119,z:-34+(i*5%19),w:.34,h:.015,d:.23,rot:i*.8}));
  // Clinic wayfinding
  for(let z of [-30,-22]){const strip=box(43,.089,z,15,.014,.15,mat(0x9bafad));}
  for(let x of [34,53]){for(let z of [-33,-24]){box(x,.42,z,3,.8,1,mat(0x697b79),true);
@@ -248,8 +326,8 @@ function makeWorld(){
  for(const x of [36,54]){box(x,1.45,-32.0,.10,1.3,.10,medTrim);
    cyl(x,2.15,-32,.24,.11,medTrim);}
  // privacy curtains near medical beds
- for(let x of [36,54]){const curtain=box(x,2.7,-31,.07,2.65,5,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
- for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,matUnique(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
+ for(let x of [32,58]){const curtain=box(x,2.55,-34,.065,2.0,2.3,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
+ for(let x of [38,48]){for(let z of [-34,-27]){const fixture=box(x,4.74,z,2.8,.13,.43,matUnique(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
  addLight(44,4,-24,0xaddde2,6,22);addLight(54,3.8,-32,0xa7def0,4,15);
  const ward=label("WARD B   /   TRIAGE",10,1.1,"#37565d","#e1e6df",48);ward.position.set(46,2.7,-38.52);world.add(ward);
  // Patrol car, street debris and reflective safety cones form a readable landmark.
@@ -290,31 +368,26 @@ function makeCar(x,z,color,police=false){
 }
 function makeTree(x,z){cyl(x,1.35,z,.25,2.7,mat(0x55483a));for(let i=0;i<3;i++)sphere(x+rand(-.6,.6),3.2+rand(-.3,.7),z+rand(-.5,.5),rand(.9,1.5),mat([0x47574d,0x59604b,0x3d4c45][i]));}
 function plaidTexture(){
- const c=document.createElement("canvas");c.width=c.height=256;
- const ctx=c.getContext("2d");
- ctx.fillStyle="#535657";ctx.fillRect(0,0,256,256);
- // Slightly faded red-and-charcoal plaid; all fabric detail stays in one texture.
- for(let n=0;n<256;n+=64){
-  ctx.fillStyle="#713f3d";ctx.fillRect(n,0,26,256);ctx.fillRect(0,n,256,26);
-  ctx.fillStyle="rgba(30,36,42,.42)";
-  ctx.fillRect(n+28,0,7,256);ctx.fillRect(0,n+28,256,7);
+ const c=document.createElement("canvas");c.width=c.height=512;
+ const ctx=c.getContext("2d");ctx.fillStyle="#171a1a";ctx.fillRect(0,0,512,512);
+ // Screenshot reference: bright red, dense charcoal plaid with narrow dark seams.
+ for(let k=0;k<512;k+=128){
+  ctx.fillStyle="#8e262c";ctx.fillRect(k+4,0,63,512);ctx.fillRect(0,k+5,512,63);
+  ctx.fillStyle="rgba(192,65,57,.58)";ctx.fillRect(k+18,0,9,512);ctx.fillRect(0,k+19,512,9);
+  ctx.fillStyle="rgba(23,26,27,.8)";ctx.fillRect(k+68,0,14,512);ctx.fillRect(0,k+68,512,14);
  }
- for(let n=0;n<256;n+=32){
-  ctx.fillStyle="#29394188";ctx.fillRect(n,0,4,256);ctx.fillRect(0,n,256,4);
+ for(let k=0;k<512;k+=32){
+  ctx.fillStyle="rgba(2,5,5,.31)";ctx.fillRect(k,0,3,512);ctx.fillRect(0,k,512,3);
  }
- for(let i=0;i<3200;i++){
-  const x=rand(0,256),y=rand(0,256);
-  ctx.fillStyle=i%3===0?"rgba(208,184,150,.095)":"rgba(13,14,17,.095)";
-  ctx.fillRect(x,y,rand(.3,1.8),rand(.3,1.7));
+ let seed=91243;const rng=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ for(let n=0;n<5500;n++){
+  const x=rng()*512,y=rng()*512;ctx.fillStyle=n%4===0?"rgba(198,163,132,.12)":"rgba(0,0,0,.09)";
+  ctx.fillRect(x,y,.2+rng()*2,.25+rng()*2.6);
  }
- for(let i=0;i<32;i++){
-  const x=rand(0,256),y=rand(0,256);
-  ctx.strokeStyle="rgba(17,23,23,.15)";ctx.lineWidth=rand(.5,2.5);
-  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+rand(-17,17),y+rand(-4,4));ctx.stroke();
- }
- const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
- t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- return t;
+ const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+ tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+ tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return tex;
 }
 const plaidMat=new THREE.MeshStandardMaterial({map:plaidTexture(),roughness:.98});
 const infectedSkin=wornSurface(0x8c9783,923,1,1);
@@ -328,12 +401,13 @@ function humanoid(kind="player"){
  const group=new THREE.Group();
  const zombie=["walker","runner","brute","spitter"].includes(kind);
  const skin=zombie?infectedSkin:mat(kind==="mara"?0xc39e80:0xb8a18b);
- const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xc5d1c9):kind==="runner"?infectedFabric.runner:kind==="brute"?infectedFabric.brute:kind==="spitter"?infectedFabric.spitter:infectedFabric.walker;
- const pants=mat(zombie?0x48473f:kind==="vale"?0x4d616c:0x39444a);
- const torso=box(0,1.61,0,.85,1.0,.48,zombie?fabric.clone():fabric,false,group);
+ const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xd5d6ce):kind==="guard"?mat(0x607981):kind==="runner"?infectedFabric.runner:kind==="brute"?infectedFabric.brute:kind==="spitter"?infectedFabric.spitter:infectedFabric.walker;
+ const pants=mat(zombie?0x48473f:kind==="vale"?0xa9aaa0:kind==="player"?0x554539:kind==="guard"?0x2f5265:0x39444a);
+ const torso=mesh(jacketTorsoGeometry,zombie?fabric.clone():fabric,0,1.61,0,group);torso.castShadow=true;
  box(0,1.11,0,.72,.18,.43,pants,false,group);
- const head=sphere(0,2.42,-.01,.33,skin,group);
- const hair=sphere(0,2.69,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.29,.13,.28);
+ const head=sphere(0,2.42,-.01,.33,skin,group);head.scale.set(.27,.363,.277);
+ box(0,2.36,-.286,.071,.13,.11,skin,false,group);
+ const hair=sphere(0,2.70,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.27,.12,.245);
  for(let side of [-1,1]){sphere(side*.13,2.46,-.29,.036,mat(0x1d2220),group);}
  const limbs=[];
  for(let s of [-1,1]){
@@ -345,21 +419,38 @@ function humanoid(kind="player"){
   box(0,-.89,-.10,.37,.20,.55,dark,false,leg);limbs.push(leg);
  }
  if(kind==="player"){
-  const canvas=mat(0x514d42),seam=mat(0x8a8576),worn=mat(0x3d4246),metal=mat(0x8d9494,.38,.6);
-  box(0,1.56,.38,.73,.94,.28,canvas,false,group);
-  for(let side of [-1,1]){
-   const strap=box(side*.27,1.66,-.26,.10,.90,.09,seam,false,group);strap.rotation.z=side*.12;
-   box(side*.26,1.78,-.335,.16,.12,.045,metal,false,group);
-   box(side*.30,1.40,.53,.11,.28,.06,seam,false,group);
+  const olive=mat(0x334b36),edging=mat(0x1c2921),webbing=mat(0x647454),worn=mat(0x392b29),hardware=mat(0xa5a58a,.42,.6);
+  // Structured green field backpack with folded flap, straps and deep side pockets.
+  box(0,1.57,.43,.72,1.06,.40,olive,false,group);
+  box(0,1.99,.67,.68,.22,.08,mat(0x405940),false,group);
+  box(0,1.82,.679,.55,.055,.06,webbing,false,group);
+  box(0,1.20,.65,.48,.32,.13,olive,false,group);
+  box(0,1.36,.728,.49,.065,.06,edging,false,group);
+  for(const side of [-1,1]){
+   const strap=box(side*.31,1.65,-.33,.11,.91,.10,edging,false,group);strap.rotation.z=side*.12;
+   box(side*.34,1.75,-.39,.10,.22,.055,webbing,false,group);
+   box(side*.38,1.42,.41,.16,.60,.30,olive,false,group);
+   box(side*.40,1.27,.60,.13,.08,.06,webbing,false,group);
+   box(side*.26,1.82,.71,.07,.16,.065,hardware,false,group);
   }
-  box(0,1.16,.55,.55,.32,.10,canvas,false,group);
-  box(0,1.38,.544,.48,.08,.08,seam,false,group);
-  box(.47,1.05,-.09,.14,.5,.13,metal,false,group);
-  // Existing animation groups are preserved: elbow and knee wear follows their rig.
-  for(const idx of [0,2])box(0,-.55,-.17,.30,.25,.06,worn,false,limbs[idx]);
-  for(const idx of [1,3])box(0,-.58,-.19,.31,.25,.065,worn,false,limbs[idx]);
+  // Weathered elbows and knees attached to the existing animation pivots.
+  for(const idx of [0,2])box(0,-.53,-.17,.28,.19,.07,worn,false,limbs[idx]);
+  for(const idx of [1,3])box(0,-.56,-.19,.30,.19,.065,worn,false,limbs[idx]);
+  box(0,1.08,-.34,.38,.11,.10,mat(0x2b2421),false,group);
+  box(.46,1.05,-.08,.11,.48,.12,hardware,false,group);
  }
- if(kind==="vale"){box(0,1.36,-.28,.52,.75,.07,mat(0xe1e4da),false,group);box(0,1.49,-.35,.09,.3,.07,mat(0x35727b),false,group);}
+ if(kind==="vale"){
+  box(0,1.36,-.29,.52,.65,.06,mat(0xe0e2da),false,group);
+  box(.27,1.61,-.35,.12,.16,.055,mat(0x4c7e80),false,group);
+  box(0,1.49,-.35,.08,.32,.055,mat(0x819d9c),false,group);
+  for(const side of [-1,1])box(side*.16,1.69,-.34,.035,.15,.06,mat(0xbac4c0),false,group);
+ }
+ if(kind==="guard"){
+  box(0,2.70,0,.66,.22,.60,mat(0x59665b),false,group);
+  box(0,2.60,-.27,.65,.06,.45,mat(0x464e46),false,group);
+  box(-.27,1.70,-.31,.14,.21,.05,mat(0x9ca395),false,group);
+  box(0,1.21,-.30,.48,.15,.06,mat(0x3d4c4d),false,group);
+ }
  if(kind==="mara"){box(0,1.65,-.29,.60,.74,.12,mat(0x473f37),false,group);}
  if(kind==="brute"){
   group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x*=1.12;
@@ -392,11 +483,11 @@ function spawnEnemy(type,x,z,ambush=false){
 function spawnAmbient(){spawnEnemy("walker",-27,3);spawnEnemy("runner",5,13);spawnEnemy("spitter",32,11);}
 function makeMarker(){
  marker=new THREE.Group();scene.add(marker);
- const beamMat=new THREE.MeshBasicMaterial({color:0xf1ba73,transparent:true,opacity:.12,depthWrite:false});
- const beam=mesh(new THREE.CylinderGeometry(.65,.16,7,18,1,true),beamMat,0,3.6,0,marker);
+ const beamMat=new THREE.MeshBasicMaterial({color:0xd4b879,transparent:true,opacity:.035,depthWrite:false});
+ const beam=mesh(new THREE.CylinderGeometry(.38,.10,6.5,14,1,true),beamMat,0,3.6,0,marker);
  beam.material.side=THREE.DoubleSide;
- markerRing=mesh(new THREE.TorusGeometry(.8,.06,6,48),goldMat,0,.15,0,marker);markerRing.rotation.x=Math.PI/2;
- mesh(new THREE.OctahedronGeometry(.46,0),goldMat,0,5.7,0,marker);
+ markerRing=mesh(new THREE.TorusGeometry(.62,.043,6,36),goldMat,0,.15,0,marker);markerRing.rotation.x=Math.PI/2;
+ mesh(new THREE.OctahedronGeometry(.33,0),goldMat,0,5.4,0,marker);
 }
 function setMarker(){const obj=stages[state.stage];if(!obj){marker.visible=false;return;}marker.visible=true;marker.position.set(obj.point.x,0,obj.point.z);refreshObjective();}
 function refreshObjective(){
@@ -638,8 +729,16 @@ function hud(){
  $("hp-num").textContent=Math.ceil(state.health)+" / 100";$("st-num").textContent=Math.ceil(state.stamina)+" / 100";
  $("th-num").textContent=Math.ceil(state.thirst)+"%";$("hu-num").textContent=Math.ceil(state.hunger)+"%";
  $("weapon-name").textContent=state.hasGun?"PISTOL + CROWBAR":"CROWBAR";
+ $("weapon-card-label").textContent=state.hasGun?"SERVICE PISTOL":"CROWBAR";
+ $("weapon-card-ammo").textContent=state.hasGun?state.ammo+" ROUNDS":"MELEE READY";
  $("ammo").textContent=state.hasGun?state.ammo+" ROUNDS":"MELEE";
  $("dodge-status").textContent=state.dodgeCooldown>0?"ROLL "+state.dodgeCooldown.toFixed(1)+"s":"ROLL READY";
+ const dayMinutes=16*60+Math.floor(state.time/3);
+ const day=1+Math.floor(dayMinutes/1440),minutes=dayMinutes%1440;
+ const pad=n=>String(n).padStart(2,"0");
+ $("world-clock").textContent="DAY "+day+" · "+pad(Math.floor(minutes/60))+":"+pad(minutes%60)+" · N";
+ $("world-condition").textContent="FOOD "+Math.ceil(state.hunger)+"  WATER "+Math.ceil(state.thirst)+"  FATIGUE "+Math.round(100-state.stamina);
+
  const q=stages[state.stage];$("waypoint-distance").textContent=Math.round(dist(pos(),q.point))+" m";
  $("danger-text").textContent=state.stage===7?"INFECTED ASSAULT · "+state.waveKills+"/4":"AIRBORNE CONTAMINATION";
  if(q.kind==="interact"&&dist(pos(),q.point)<4){$("context").hidden=false;$("context-label").textContent="PRESS E · "+q.name;}else $("context").hidden=true;
@@ -657,14 +756,17 @@ function drawMap(){
  ctx.strokeStyle="#778984";ctx.lineWidth=2;ctx.strokeRect(1,1,w-2,h-2);
 }
 function updateCamera(dt){
- const horizontal=Math.cos(cameraPitch)*12.5,vertical=Math.sin(cameraPitch)*12.5+state.cameraKick*.85;
- const pivot=V(state.x,1.65,state.z);
+ const horizontal=Math.cos(cameraPitch)*7.5,vertical=Math.sin(cameraPitch)*7.5+state.cameraKick*.85;
+ const pivot=V(state.x,2.2,state.z);
  const desired=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.65,state.z+Math.cos(cameraYaw)*horizontal);
  const delta=desired.clone().sub(pivot),maxDist=delta.length(),dir=delta.normalize();
  cameraRay.set(pivot,dir);cameraRay.near=.2;cameraRay.far=maxDist;
  const hits=cameraRay.intersectObjects(solidMeshes,false);
  if(hits.length)desired.copy(pivot).addScaledVector(dir,Math.max(1.5,hits[0].distance-.35));
  camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
+ fieldFlashlight.position.set(state.x,2.22,state.z);
+ fieldFlashlightTarget.position.set(state.x-Math.sin(cameraYaw)*12,1.55,state.z-Math.cos(cameraYaw)*12);
+ fieldFlashlightTarget.updateMatrixWorld();
 }
 function togglePerf(){
  $("perf-panel").hidden=!$("perf-panel").hidden;
@@ -699,7 +801,7 @@ function exportPerformanceReport(){
 function applyQuality(mode,notify=false){
  qualityMode=mode==="performance"?"performance":"auto";
  const low=qualityMode==="performance";
- renderer.setPixelRatio(low?1:Math.min(devicePixelRatio,1.6));
+ renderer.setPixelRatio(low?Math.min(devicePixelRatio,.85):Math.min(devicePixelRatio,1.6));
  renderer.shadowMap.enabled=!low;
  $("quality-button").textContent=low?"GRAPHICS: PERFORMANCE":"GRAPHICS: AUTO";
  try{localStorage.setItem("ashfordGraphicsV02",qualityMode);}catch(e){}
@@ -737,7 +839,7 @@ function start(){state.started=true;state.paused=false;$("intro").classList.remo
  if(matchMedia("(pointer:coarse)").matches||innerWidth<750)$("mobile-controls").hidden=false;
  loadGame();setMarker();try{tone(480,.15);}catch(e){}}
 function controls(){
- $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;
+ $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;$("light-button").onclick=toggleFlashlight;
  $("export-perf").onclick=exportPerformanceReport;
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
  $("quality-button").onclick=()=>applyQuality(qualityMode==="auto"?"performance":"auto",true);
@@ -756,7 +858,7 @@ function controls(){
  if(e.repeat)return;
  if(e.code==="Escape"){if($("pack-modal").classList.contains("visible")){resume();return;}if(activeDialog)return;pause();}
  if(e.code==="KeyI"){if($("pack-modal").classList.contains("visible"))resume();else showPack();}
- if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="KeyX")dodge();if(e.code==="Space")melee();
+ if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="KeyL")toggleFlashlight();if(e.code==="KeyX")dodge();if(e.code==="Space")melee();
  });
  addEventListener("keyup",e=>{keys[e.code]=false;});
  addEventListener("blur",()=>{for(const k in keys)keys[k]=false;touch.x=0;touch.y=0;touch.sprint=false;});
@@ -803,6 +905,13 @@ function installLocalQA(){
    spawnEnemy(type,0,range,true);enemies.at(-1).cd=.4;
   },
   teleport(x,z){if(!Number.isFinite(x)||!Number.isFinite(z))throw new Error("Invalid QA location");state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);playerVisual.position.set(state.x,0,state.z);},
+  referenceView(x,z,yaw=0,stage=6){
+   if(![x,z,yaw].every(Number.isFinite)||!Number.isInteger(stage)||stage<0||stage>=stages.length)throw Error("Invalid local screenshot view");
+   if(state.stage===7)throw Error("Do not reposition during clinic defense");
+   state.stage=stage;state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);state.angle=yaw;cameraYaw=yaw;
+   playerVisual.position.set(state.x,0,state.z);playerVisual.rotation.y=yaw;
+   refreshObjective();setMarker();updateLightBudget();updateCamera(1);
+  },
   finishWave(){if(state.stage!==7)throw new Error("Clinic assault is not active");
    for(const enemy of [...enemies].filter(e=>e.ambush&&!e.dead).slice(0,4)){hurtEnemy(enemy,enemy.hp+1);}
   }
@@ -826,20 +935,20 @@ function animate(){
   hud();
   if(state.lastSave>12){saveGame();state.lastSave=0;}
  }
- if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
+ if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.4+Math.sin(performance.now()*.002)*.18;}
  updateCamera(frameDt);drawMap();lightBudgetElapsed+=frameDt;if(lightBudgetElapsed>=.38){updateLightBudget();lightBudgetElapsed=0;}renderer.render(scene,camera);
  perfPanelElapsed+=elapsed;if(perfPanelElapsed>.9){updatePerfReadout();perfPanelElapsed=0;}
  // Measure actual elapsed frame time rather than capped physics delta.
  fpsFrames++;fpsLast+=elapsed;
  if(fpsLast>=5){
   const fps=fpsFrames/fpsLast;
-  if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}
+  if(fps<27&&qualityMode!=="performance"){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}
   fpsLast=0;fpsFrames=0;
  }
 }
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);
- createNPC("mara",-14,-27,Math.PI);createNPC("vale",48,-29,Math.PI);
+ createNPC("mara",-14,-27,Math.PI);createNPC("vale",51,-29,Math.PI);createNPC("guard",35,-28,Math.PI);
  updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();updateCamera(1);animate();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}
