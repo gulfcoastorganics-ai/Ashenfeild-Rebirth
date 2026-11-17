@@ -475,6 +475,19 @@ function updateCamera(dt){
  if(hits.length)desired.copy(pivot).addScaledVector(dir,Math.max(1.5,hits[0].distance-.35));
  camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
 }
+function togglePerf(){
+ $("perf-panel").hidden=!$("perf-panel").hidden;
+ if(!$("perf-panel").hidden)updatePerfReadout();
+}
+function updatePerfReadout(){
+ if($("perf-panel").hidden)return;
+ const frames=qaFrameMs.slice().sort((a,b)=>a-b),n=frames.length;
+ const avg=n?frames.reduce((a,b)=>a+b,0)/n:0;
+ const fps=avg?Math.round(1000/avg):0;
+ const p95=n?Math.round(frames[Math.min(n-1,Math.floor(n*.95))]):0;
+ $("perf-numbers").textContent="FPS (sample): "+fps+"\nFrame p95: "+p95+" ms\nDraw calls: "+renderer.info.render.calls+
+ "\nTriangles: "+renderer.info.render.triangles+"\nPixel ratio: "+renderer.getPixelRatio().toFixed(2);
+}
 function applyQuality(mode,notify=false){
  qualityMode=mode==="performance"?"performance":"auto";
  const low=qualityMode==="performance";
@@ -516,7 +529,7 @@ function start(){state.started=true;state.paused=false;$("intro").classList.remo
  if(matchMedia("(pointer:coarse)").matches||innerWidth<750)$("mobile-controls").hidden=false;
  loadGame();setMarker();try{tone(480,.15);}catch(e){}}
 function controls(){
- $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;
+ $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
  $("quality-button").onclick=()=>applyQuality(qualityMode==="auto"?"performance":"auto",true);
  try{qualityMode=localStorage.getItem("ashfordGraphicsV02")||"auto";}catch(e){}
@@ -528,7 +541,7 @@ function controls(){
  if(e.repeat)return;
  if(e.code==="Escape"){if($("pack-modal").classList.contains("visible")){resume();return;}if(activeDialog)return;pause();}
  if(e.code==="KeyI"){if($("pack-modal").classList.contains("visible"))resume();else showPack();}
- if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="Space")melee();
+ if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="Space")melee();
  });
  addEventListener("keyup",e=>{keys[e.code]=false;});
  addEventListener("blur",()=>{for(const k in keys)keys[k]=false;touch.x=0;touch.y=0;touch.sprint=false;});
@@ -566,7 +579,7 @@ function installLocalQA(){
  })});
 }
 const clock=new THREE.Clock();let fpsFrames=0,fpsLast=0;
-const qaFrameMs=[];
+const qaFrameMs=[];let perfPanelElapsed=0;
 function animate(){
  requestAnimationFrame(animate);
  // Simulate up to 250 ms of wall-clock time using small steps so weak GPUs
@@ -585,6 +598,7 @@ function animate(){
  }
  if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
  updateCamera(frameDt);drawMap();renderer.render(scene,camera);
+ perfPanelElapsed+=elapsed;if(perfPanelElapsed>.9){updatePerfReadout();perfPanelElapsed=0;}
  // Measure actual elapsed frame time rather than capped physics delta.
  fpsFrames++;fpsLast+=elapsed;
  if(fpsLast>=5){
