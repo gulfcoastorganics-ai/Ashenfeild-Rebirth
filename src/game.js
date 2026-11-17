@@ -524,9 +524,6 @@ function aimDirection(){
 }
 function chaseGoal(enemy,target){return chooseChaseGoal(enemy,target);}
 function updatePlayer(dt){
- // Keyboard camera rotation is accessible without a mouse drag (Q left / R right).
- const turn=(keys.KeyQ?1:0)-(keys.KeyR?1:0);
- cameraYaw+=turn*dt*2.8;
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
  let mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
  const len=Math.hypot(mx,mz);if(len>1){mx/=len;mz/=len;}
@@ -687,6 +684,12 @@ function controls(){
  $("mobile-interact").onclick=interact;$("mobile-attack").onclick=melee;$("mobile-fire").onclick=shoot;$("mobile-dodge").onclick=dodge;
  for(const evt of ["pointerdown","pointerup","pointercancel"])$("mobile-sprint").addEventListener(evt,e=>{e.preventDefault();touch.sprint=evt==="pointerdown";});
  addEventListener("keydown",e=>{keys[e.code]=true;if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code))e.preventDefault();
+ // Exact keyboard turn increments, independent of low software-renderer FPS.
+ // Native repeated keydown events provide smooth held-key turning on hardware.
+ if((e.code==="KeyQ"||e.code==="KeyR")&&state.started&&!state.paused&&!state.ended){
+  cameraYaw+=e.code==="KeyQ"?.12:-.12;
+  e.preventDefault();return;
+ }
  if(e.repeat)return;
  if(e.code==="Escape"){if($("pack-modal").classList.contains("visible")){resume();return;}if(activeDialog)return;pause();}
  if(e.code==="KeyI"){if($("pack-modal").classList.contains("visible"))resume();else showPack();}
