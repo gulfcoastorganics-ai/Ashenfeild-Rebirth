@@ -608,14 +608,30 @@ function togglePerf(){
  $("perf-panel").hidden=!$("perf-panel").hidden;
  if(!$("perf-panel").hidden)updatePerfReadout();
 }
+function currentMetrics(){
+ const sample=summarizeFrames(qaFrameMs);
+ return {...sample,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
+ geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
+ pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
+ quality:qualityMode,build:"reconstruction-v0.6"};
+}
 function updatePerfReadout(){
  if($("perf-panel").hidden)return;
- const frames=qaFrameMs.slice().sort((a,b)=>a-b),n=frames.length;
- const avg=n?frames.reduce((a,b)=>a+b,0)/n:0;
- const fps=avg?Math.round(1000/avg):0;
- const p95=n?Math.round(frames[Math.min(n-1,Math.floor(n*.95))]):0;
- $("perf-numbers").textContent="FPS (sample): "+fps+"\nFrame p95: "+p95+" ms\nDraw calls: "+renderer.info.render.calls+
- "\nTriangles: "+renderer.info.render.triangles+"\nPixel ratio: "+renderer.getPixelRatio().toFixed(2);
+ const m=currentMetrics();
+ $("perf-numbers").textContent="FPS: "+m.fps+"\nFrame p95: "+m.p95Ms+" ms\nDraw calls: "+m.drawCalls+
+ "\nTriangles: "+m.triangles+"\nGeometries: "+m.geometries+"\nPixel ratio: "+m.pixelRatio.toFixed(2);
+}
+function exportPerformanceReport(){
+ if(!state.started){toast("START THE GAME FIRST");return;}
+ const report={createdAt:new Date().toISOString(),source:"local in-browser sampling",
+  statement:"Not a GPU profiler. Includes device viewport and local browser frame timings.",
+  metrics:currentMetrics(),framesMs:[...qaFrameMs]};
+ const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob);
+ const link=document.createElement("a");link.href=url;link.download="ashford-v06-performance.json";
+ document.body.appendChild(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+ toast("LOCAL PERFORMANCE REPORT SAVED");
 }
 function applyQuality(mode,notify=false){
  qualityMode=mode==="performance"?"performance":"auto";
@@ -659,6 +675,7 @@ function start(){state.started=true;state.paused=false;$("intro").classList.remo
  loadGame();setMarker();try{tone(480,.15);}catch(e){}}
 function controls(){
  $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;
+ $("export-perf").onclick=exportPerformanceReport;
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
  $("quality-button").onclick=()=>applyQuality(qualityMode==="auto"?"performance":"auto",true);
  try{qualityMode=localStorage.getItem("ashfordGraphicsV02")||"auto";}catch(e){}
