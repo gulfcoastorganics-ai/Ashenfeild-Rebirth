@@ -405,7 +405,7 @@ function humanoid(kind="player"){
  const pants=mat(zombie?0x48473f:kind==="vale"?0xa9aaa0:kind==="player"?0x554539:kind==="guard"?0x2f5265:0x39444a);
  const torso=mesh(jacketTorsoGeometry,zombie?fabric.clone():fabric,0,1.61,0,group);torso.castShadow=true;
  box(0,1.11,0,.72,.18,.43,pants,false,group);
- const head=sphere(0,2.42,-.01,.33,skin,group);head.scale.set(.82,1.10,.84);
+ const head=sphere(0,2.42,-.01,.33,skin,group);head.scale.set(.27,.363,.277);
  box(0,2.36,-.286,.071,.13,.11,skin,false,group);
  const hair=sphere(0,2.70,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.27,.12,.245);
  for(let side of [-1,1]){sphere(side*.13,2.46,-.29,.036,mat(0x1d2220),group);}
