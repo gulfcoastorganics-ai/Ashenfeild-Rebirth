@@ -24,6 +24,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: JavaScript syntax and deterministic rules
         run: npm run check
+      - name: Visual scene render/resource checks
+        run: npm run test:visual
       - name: Normal-rules campaign test (no gameplay overrides)
         run: npm run test:campaign
       - name: WebGL opening-route smoke test
