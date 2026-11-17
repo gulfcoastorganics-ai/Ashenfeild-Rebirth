@@ -16,10 +16,10 @@
 <div class="hud" id="hud" hidden>
  <header class="topbar">
   <div class="brand"><small>ASHFORD COUNTY / OUTBREAK +07</small><strong>DEAD ZONE <b>:</b> AFTERMATH</strong></div>
-  <div class="topbuttons"><span class="build">RECONSTRUCTION · v0.8</span><button id="perf-button" title="Performance metrics (P)">FPS <kbd>P</kbd></button><button id="inventory-button" title="Inventory (I)">PACK <kbd>I</kbd></button><button id="light-button" title="Toggle flashlight (L)" aria-pressed="false">LIGHT <kbd>L</kbd></button><button id="pause-button" title="Pause (Esc)">Ⅱ</button></div>
+  <div class="topbuttons"><button id="perf-button" title="Performance metrics (P)">FPS <kbd>P</kbd></button><button id="inventory-button" title="Inventory (I)">PACK <kbd>I</kbd></button><button id="light-button" title="Toggle flashlight (L)" aria-pressed="false">LIGHT <kbd>L</kbd></button><button id="pause-button" title="Pause (Esc)" aria-label="Pause">Ⅱ</button></div>
  </header>
  <section id="perf-panel" class="perf-panel" hidden aria-live="off"><div class="eyebrow">RENDER DIAGNOSTICS</div><div id="perf-numbers">Collecting frames…</div><small>Local browser frame samples · not GPU profiler</small><button id="export-perf" class="perf-export" type="button">SAVE REPORT</button></section>
- <section class="environment-readout" aria-live="off"><span id="world-clock">DAY 1 · 16:00 · N</span><span id="world-condition">FOOD 80 WATER 80 FATIGUE 0</span></section>
+ <section class="environment-readout" aria-label="Time and supplies"><span id="world-clock">DAY 1 · 16:00 · N</span><span id="world-condition">FOOD 80 · WATER 80</span></section>
  <section class="leftpanel">
   <div class="stat"><div class="stat-title"><span>HEALTH</span><span id="hp-num">100 / 100</span></div><div class="track"><div id="hp-bar" class="fill health"></div></div></div>
   <div class="stat"><div class="stat-title"><span>STAMINA</span><span id="st-num">100 / 100</span></div><div class="track"><div id="st-bar" class="fill stamina"></div></div></div>

@@ -66,6 +66,20 @@ try{
   await page.locator("#quality-button").click();
   assert((await page.locator("#quality-button").innerText()).includes("PERFORMANCE"),"Manual Performance mode unavailable");
  }
+ async function assertGraphics(selected,tier,shadows){
+  const graphics=await page.evaluate(()=>({stored:localStorage.getItem("ashfordGraphicsV02"),...window.__ashfordQA.perf()}));
+  assert.equal(graphics.stored,selected);
+  assert.equal(graphics.quality,selected);
+  assert.equal(graphics.renderTier,tier);
+  assert.equal(graphics.shadows,shadows);
+ }
+ await assertGraphics("performance","performance",false);
+ for(const [selected,tier] of [["balanced","balanced"],["quality","quality"],["auto","balanced"]]){
+  await page.locator("#quality-button").click();
+  await assertGraphics(selected,tier,true);
+ }
+ await page.locator("#quality-button").click();
+ await assertGraphics("performance","performance",false);
  await page.locator("#resume").click();
  report("Pause / resume and quality preset","PASS");
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem("ashfordRebirthV01")||"null"));
@@ -74,6 +88,7 @@ try{
  await page.locator("#loader.hide").waitFor({timeout:45000});
  await page.locator("#start-button").click();
  assert(await page.locator("#hud").isVisible(),"Reloaded game failed to start");
+ await assertGraphics("performance","performance",false);
  // Wait for the first refreshed HUD frame rather than asserting against the "-- m" placeholder.
  try{
   await page.waitForFunction(maxDistance=>{

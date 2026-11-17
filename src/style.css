@@ -82,3 +82,17 @@
  .topbuttons button{font-size:8px;padding:8px 5px}
  .weapon-card{bottom:230px}
 }
+
+@media(pointer:coarse),(max-width:750px){
+ .environment-readout{display:flex;top:46px;right:8px;min-width:0;gap:3px;padding:5px 6px;font-size:8px}
+ .environment-readout #world-condition{font-size:8px}
+ .topbuttons button{min-height:36px}
+}
+
+@media(max-height:525px) and (orientation:landscape){
+ #joystick{left:16px;bottom:16px;width:104px;height:104px}
+ #joystick .stick{top:30px;left:30px;width:40px;height:40px}
+ #mobile-actions{bottom:12px;grid-template-rows:repeat(3,42px)}
+ .weapon-card{bottom:165px}
+ .panel-modal,.dialogue-box{max-height:calc(100dvh - 24px);overflow-y:auto}
+}
