@@ -26,6 +26,8 @@ jobs:
         run: npm run check
       - name: Visual scene render/resource checks
         run: npm run test:visual
+      - name: Screenshot reference visual and HUD test
+        run: npm run test:reference
       - name: Normal-rules campaign test (no gameplay overrides)
         run: npm run test:campaign
       - name: WebGL opening-route smoke test
