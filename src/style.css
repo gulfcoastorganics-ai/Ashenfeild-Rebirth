@@ -3,4 +3,4 @@
 
 .perf-panel{position:absolute;top:104px;left:255px;width:210px;padding:10px 13px;background:rgba(11,20,22,.89);border:1px solid rgba(173,158,126,.5);box-shadow:0 4px 22px rgba(0,0,0,.35);font:11px/1.7 ui-monospace,Consolas,monospace;letter-spacing:.02em;color:#d4ddcf}
 .perf-panel[hidden]{display:none}.perf-panel .eyebrow{font-size:8px;letter-spacing:.10em}.perf-panel small{color:#9fa69e;font-size:8px}.perf-panel #perf-numbers{margin-top:7px;white-space:pre-line}
-@media(max-width:750px){.perf-panel{top:235px;left:10px;width:175px;font-size:10px;padding:7px 9px}.topbuttons #perf-button kbd{display:none}}
+@media(max-width:750px){.perf-panel{top:302px;left:10px;width:175px;font-size:10px;padding:7px 9px}.topbuttons #perf-button kbd{display:none}}
