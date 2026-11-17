@@ -647,12 +647,26 @@ function controls(){
 function installLocalQA(){
  if(location.hostname!=="127.0.0.1"||new URLSearchParams(location.search).get("__qa")!=="1")return;
  Object.defineProperty(window,"__ashfordQA",{configurable:false,value:Object.freeze({
-  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,ambush:e.ambush}))};},
+  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,hp:e.hp,max:e.max,ambush:e.ambush,intent:e.attackIntent?.kind||null,windup:e.windup}))};},
   perf(){const frames=[...qaFrameMs].sort((a,b)=>a-b);const n=frames.length,avg=n?frames.reduce((x,y)=>x+y,0)/n:0;
    return {sampleCount:n,averageFPS:avg?1000/avg:null,p50FrameMs:n?frames[Math.floor(n*.5)]:null,p95FrameMs:n?frames[Math.min(n-1,Math.floor(n*.95))]:null,
      drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio()};
   },
   noDamage(on){state.qaNoDamage=Boolean(on);},
+  combatSetup(type="walker",range=6){
+   if(!Object.hasOwn(INFECTED,type)||!Number.isFinite(range)||range<1||range>12)throw Error("Invalid combat fixture");
+   for(const e of enemies)world.remove(e.mesh);enemies.length=0;
+   state.stage=7;state.waveStarted=true;state.waveKills=0;state.waveTimer=-1000;
+   state.hasGun=true;state.ammo=90;state.health=100;state.qaNoDamage=true;
+   state.x=0;state.z=0;state.angle=Math.PI;cameraYaw=Math.PI;
+   state.attackTime=0;state.shootTime=0;state.hitTime=0;state.meleeAnim=0;state.pistolAnim=0;
+   playerVisual.position.set(state.x,0,state.z);playerVisual.rotation.y=state.angle;
+   spawnEnemy(type,0,range,true);enemies.at(-1).cd=.4;setMarker();
+  },
+  combatAdd(type,range=6){
+   if(state.stage!==7||!Object.hasOwn(INFECTED,type)||!Number.isFinite(range)||range<1||range>12)throw Error("Invalid combat fixture");
+   spawnEnemy(type,0,range,true);enemies.at(-1).cd=.4;
+  },
   teleport(x,z){if(!Number.isFinite(x)||!Number.isFinite(z))throw new Error("Invalid QA location");state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);playerVisual.position.set(state.x,0,state.z);},
   finishWave(){if(state.stage!==7)throw new Error("Clinic assault is not active");
    for(const enemy of [...enemies].filter(e=>e.ambush&&!e.dead).slice(0,4)){hurtEnemy(enemy,enemy.hp+1);}
