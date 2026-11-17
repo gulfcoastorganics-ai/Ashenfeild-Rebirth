@@ -24,6 +24,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: JavaScript syntax and deterministic rules
         run: npm run check
+      - name: Normal-rules campaign test (no gameplay overrides)
+        run: npm run test:campaign
       - name: WebGL opening-route smoke test
         run: npm run test:browser
       - name: Keyboard-controlled opening-route test
@@ -32,8 +34,6 @@ jobs:
         run: npm run test:mobile
       - name: Combat input and infected attack integration test
         run: npm run test:combat
-      - name: Normal-rules campaign test (no gameplay overrides)
-        run: npm run test:campaign
       - name: Attach browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
