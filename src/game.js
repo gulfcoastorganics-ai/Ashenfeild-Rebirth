@@ -524,6 +524,9 @@ function aimDirection(){
 }
 function chaseGoal(enemy,target){return chooseChaseGoal(enemy,target);}
 function updatePlayer(dt){
+ // Keyboard camera rotation is accessible without a mouse drag (Q left / R right).
+ const turn=(keys.KeyQ?1:0)-(keys.KeyR?1:0);
+ cameraYaw+=turn*dt*2.8;
  let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
  let mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
  const len=Math.hypot(mx,mz);if(len>1){mx/=len;mz/=len;}
@@ -712,7 +715,7 @@ function controls(){
 function installLocalQA(){
  if(location.hostname!=="127.0.0.1"||new URLSearchParams(location.search).get("__qa")!=="1")return;
  Object.defineProperty(window,"__ashfordQA",{configurable:false,value:Object.freeze({
-  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,hp:e.hp,max:e.max,ambush:e.ambush,intent:e.attackIntent?.kind||null,windup:e.windup}))};},
+  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,cameraYaw,inventory:{...state.inventory},enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,hp:e.hp,max:e.max,ambush:e.ambush,intent:e.attackIntent?.kind||null,windup:e.windup}))};},
   perf(){const frames=[...qaFrameMs].sort((a,b)=>a-b);const n=frames.length,avg=n?frames.reduce((x,y)=>x+y,0)/n:0;
    return {sampleCount:n,averageFPS:avg?1000/avg:null,p50FrameMs:n?frames[Math.floor(n*.5)]:null,p95FrameMs:n?frames[Math.min(n-1,Math.floor(n*.95))]:null,
      drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio()};
