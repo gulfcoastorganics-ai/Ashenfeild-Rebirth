@@ -54,6 +54,19 @@ const cameraRay=new THREE.Raycaster();
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
+function instanced(count,material,transform){
+ const group=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),material,count);
+ const dummy=new THREE.Object3D();
+ for(let i=0;i<count;i++){
+  const data=transform(i);
+  dummy.position.set(data.x,data.y,data.z);
+  dummy.scale.set(data.w,data.h,data.d);
+  dummy.rotation.set(0,data.rot||0,0);
+  dummy.updateMatrix();group.setMatrixAt(i,dummy.matrix);
+ }
+ group.instanceMatrix.needsUpdate=true;group.castShadow=false;group.receiveShadow=false;
+ world.add(group);return group;
+}
 function cyl(x,y,z,r,depth,material,group=world){const m=mesh(new THREE.CylinderGeometry(r,r,depth,9),material,x,y,z,group);m.castShadow=true;return m}
 function sphere(x,y,z,r,material,group=world){const m=mesh(new THREE.SphereGeometry(r,10,8),material,x,y,z,group);m.castShadow=true;return m}
 function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);return l}
@@ -115,9 +128,9 @@ function makeWorld(){
  box(0,.08,-8,145,.17,.32,dust);box(0,.08,8,145,.17,.32,dust);
  for(let x=-66;x<67;x+=9)box(x,.063,0,4,.018,.15,mat(0xc7b48b));
  // worn asphalt seam lines and cracks
- for(let i=0;i<155;i++){const x=rand(-69,69),z=rand(-7.6,7.6),len=rand(.24,1.9);
- const crack=box(x,.062,z,len,.012,.025,mat(0x131819));crack.rotation.y=rand(-1.1,1.1);}
- for(let i=0;i<105;i++){const x=rand(-68,68),z=rand(-46,39),size=rand(.09,.44);box(x,.06,z,size,.045,size,mat(i%3===0?0x6e6c5c:0x373d39));}
+ instanced(155,mat(0x171a1a),()=>({x:rand(-69,69),y:.066,z:rand(-7.6,7.6),w:rand(.24,1.9),h:.012,d:.025,rot:rand(-1.1,1.1)}));
+ for(const shade of [0x6e6c5c,0x373d39,0x444b46])
+  instanced(35,mat(shade),()=>{const size=rand(.09,.44);return {x:rand(-68,68),y:.07,z:rand(-46,39),w:size,h:.045,d:size};});
  for(let i=0;i<17;i++){const x=rand(-61,64),z=rand(-6.4,6.4);
   const puddle=mesh(new THREE.CircleGeometry(1,20),mat(0x202d31,.19,.22),x,.066,z);
   puddle.rotation.x=-Math.PI/2;puddle.scale.set(rand(.25,1.5),rand(.18,.7),1);
@@ -142,6 +155,11 @@ function makeWorld(){
   box(x,y,-13.48,rand(.08,.52),rand(.025,.15),.012,scuffMat);
  }
  box(-11,3.15,-13.47,9,.07,.05,mat(0x715f4c));
+ // Worn panels and improvised shop notes establish detail at player height.
+ for(const [x,z] of [[-21,-23],[-21,-34],[-1,-31]]){
+   box(x,1.55,z,.08,1.35,1.3,mat(0x6e6455));
+   box(x+.08,2.1,z,.035,.12,1.05,mat(0x9c8060));
+ }
  // counter, cash register, shelves, stock
  box(-15,.82,-29,7,1.65,1.25,mat(0x594734));box(-15,1.7,-29,7,.14,1.35,mat(0x88745c));
  box(-12,1.93,-29,1.1,.45,.85,dark);box(-12,2.16,-29,.9,.09,.48,glass);
@@ -170,6 +188,16 @@ function makeWorld(){
  box(x,1.04,z,3,.09,1,mat(0x909f9b));
  for(let j=-1;j<=1;j++)cyl(x+j*.65,1.35,z,.14,.5,mat(0x8a9998));
  }}
+ // Reuse simple geometry as recognizable clinic details without new mesh imports.
+ const medCabinet=mat(0x87938e),medTrim=mat(0xb8c4bd),red=mat(0x9b443e);
+ for(const [x,z] of [[39,-36],[50,-35],[35,-19],[56,-20]]){
+   box(x,2.0,z,1.35,1.55,.40,medCabinet);
+   box(x,2.75,z,1.4,.11,.47,medTrim);
+   box(x,2.0,z-.23,.18,.65,.06,red);
+   box(x,2.0,z-.24,.65,.18,.07,red);
+ }
+ for(const x of [36,54]){box(x,1.45,-32.0,.10,1.3,.10,medTrim);
+   cyl(x,2.15,-32,.24,.11,medTrim);}
  // privacy curtains near medical beds
  for(let x of [36,54]){const curtain=box(x,2.7,-31,.07,2.65,5,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
  for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,mat(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
@@ -229,15 +257,38 @@ function humanoid(kind="player"){
   box(0,-.89,-.10,.37,.20,.55,dark,false,leg);limbs.push(leg);
  }
  if(kind==="player"){
-  box(0,1.56,.38,.73,.9,.27,mat(0x5f5140),false,group);
-  for(let s of [-1,1]){const strap=box(s*.27,1.66,-.26,.09,.86,.09,mat(0x87765b),false,group);strap.rotation.z=s*.12;}
-  box(.47,1.05,-.09,.14,.5,.13,mat(0x858b84,.4,.7),false,group);
+  const canvas=mat(0x514d42),seam=mat(0x8a8576),worn=mat(0x3d4246),metal=mat(0x8d9494,.38,.6);
+  box(0,1.56,.38,.73,.94,.28,canvas,false,group);
+  for(let side of [-1,1]){
+   const strap=box(side*.27,1.66,-.26,.10,.90,.09,seam,false,group);strap.rotation.z=side*.12;
+   box(side*.26,1.78,-.335,.16,.12,.045,metal,false,group);
+   box(side*.30,1.40,.53,.11,.28,.06,seam,false,group);
+  }
+  box(0,1.16,.55,.55,.32,.10,canvas,false,group);
+  box(0,1.38,.544,.48,.08,.08,seam,false,group);
+  box(.47,1.05,-.09,.14,.5,.13,metal,false,group);
+  // Existing animation groups are preserved: elbow and knee wear follows their rig.
+  for(const idx of [0,2])box(0,-.55,-.17,.30,.25,.06,worn,false,limbs[idx]);
+  for(const idx of [1,3])box(0,-.58,-.19,.31,.25,.065,worn,false,limbs[idx]);
  }
  if(kind==="vale"){box(0,1.36,-.28,.52,.75,.07,mat(0xe1e4da),false,group);box(0,1.49,-.35,.09,.3,.07,mat(0x35727b),false,group);}
  if(kind==="mara"){box(0,1.65,-.29,.60,.74,.12,mat(0x473f37),false,group);}
- if(kind==="brute"){group.scale.set(1.32,1.27,1.24);torso.scale.x=1.35;head.scale.x=1.12;}
- if(kind==="runner"){torso.rotation.x=-.30;head.position.z=-.20;group.scale.set(.91,1,.92);}
- if(kind==="spitter"){const glow=mat(0x6b9d43);glow.emissive=new THREE.Color(0x3a9e22);glow.emissiveIntensity=.85;box(0,1.65,-.31,.39,.48,.11,glow,false,group);}
+ if(kind==="brute"){
+  group.scale.set(1.32,1.27,1.24);torso.scale.x=1.35;head.scale.x=1.12;
+  const bulk=mat(0x655e54);
+  for(const side of [-1,1]){sphere(side*.62,2.02,.02,.38,bulk,group);box(side*.60,1.63,.20,.20,.48,.20,bulk,false,group);}
+ }
+ if(kind==="runner"){
+  torso.rotation.x=-.30;head.position.z=-.20;group.scale.set(.91,1,.92);
+  limbs[0].rotation.z=.25;limbs[2].rotation.z=-.30;
+  box(-.38,1.69,-.30,.25,.40,.08,mat(0x745751),false,group);
+ }
+ if(kind==="spitter"){
+  const glow=mat(0x6b9d43);glow.emissive=new THREE.Color(0x3a9e22);glow.emissiveIntensity=.85;
+  box(0,1.65,-.31,.39,.48,.11,glow,false,group);
+  for(const side of [-1,1]){sphere(side*.42,1.35,-.28,.21,glow,group);}
+  sphere(0,2.02,-.29,.18,glow,group);
+ }
  if(zombie){box(0,1.57,-.29,.45,.22,.03,mat(0x482c2a),false,group);}
  group.userData={limbs,head,torso};
  return group;
