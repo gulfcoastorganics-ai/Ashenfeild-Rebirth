@@ -665,7 +665,7 @@ function currentMetrics(){
  return {...sample,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
  geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
  pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
- quality:qualityMode,build:"reconstruction-v0.6"};
+ quality:qualityMode,build:"reconstruction-v0.7"};
 }
 function updatePerfReadout(){
  if($("perf-panel").hidden)return;
