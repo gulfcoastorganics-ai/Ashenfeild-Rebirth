@@ -31,7 +31,7 @@ let playerVisual,marker,markerRing;
 const state={
  started:false,paused:true,ended:false,stage:0,health:100,stamina:100,thirst:80,hunger:80,
  ammo:0,mag:12,hasGun:false,supplies:0,kills:0,waveKills:0,waveStarted:false,waveTimer:0,
- x:-48,z:-24,angle:0,weapon:"crowbar",inventory:{water:1,food:2,bandage:1},
+ x:-48,z:-24,angle:Math.PI,weapon:"crowbar",inventory:{water:1,food:2,bandage:1},
  time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0
 };
 const stages=[
