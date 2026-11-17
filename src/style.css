@@ -14,3 +14,9 @@
 #crosshair.hit:after,#crosshair.kill:after{content:"✕";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:900 17px/1 sans-serif;color:#efd09b;text-shadow:0 0 10px #8f4f36}
 #crosshair.kill:after{color:#ff8c78}
 @media(prefers-reduced-motion:reduce){#crosshair{transition:none}}
+
+.perf-panel .perf-export{display:block;pointer-events:auto;cursor:pointer;width:100%;margin-top:9px;border:1px solid #a99c7d;background:rgba(27,41,43,.95);padding:8px 5px;color:#f5deb8;font:800 10px ui-monospace,monospace;letter-spacing:.09em}
+#dodge-status{font-size:9px;color:#b6d6c1;grid-column:1/-1}
+#mobile-actions{grid-template-rows:repeat(3,58px)}
+#mobile-dodge{grid-column:1/-1;background:#345348b8!important;border-color:#9ac1ad!important}
+@media(pointer:coarse),(max-width:750px){#mobile-actions{bottom:67px;grid-template-columns:repeat(2,57px);grid-template-rows:repeat(3,48px);gap:7px}#joystick{bottom:98px}}
