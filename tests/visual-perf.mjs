@@ -22,9 +22,8 @@ try{
  const page=await browser.newPage({viewport:{width:1120,height:720},deviceScaleFactor:1});
  page.on("pageerror",e=>errors.push(e.message));
  await page.goto("http://127.0.0.1:"+server.address().port+"/?__qa=1",{waitUntil:"domcontentloaded",timeout:90000});
- await page.waitForFunction(()=>window.__ashfordQA?.perf()?.sampleCount>=1,null,{timeout:60000}).catch(async()=>{
-  await page.locator("#loader.hide").waitFor({timeout:60000});
- });
+ await page.waitForFunction(()=>Boolean(window.__ashfordQA),null,{timeout:60000});
+ await page.locator("#loader.hide").waitFor({timeout:60000});
  await page.locator("#start-button").click();
  await mkdir(resolve(root,"artifacts"),{recursive:true});
  // Test-only camera repositioning used for image/resource sampling, not gameplay.
