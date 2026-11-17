@@ -384,17 +384,18 @@ function makeWorld(){
  const ceilingGlow=matUnique(0xecebd0,.58);
  ceilingGlow.emissive=new THREE.Color(0xd6f4c4);ceilingGlow.emissiveIntensity=1.8;
  box(45,4.67,-30.05,6.45,.065,.22,ceilingGlow);
- // Triage counter and red first aid container on the right.
- box(56,1.04,-32.8,5.0,2.0,1.85,wornSurface(0x4c4437,193,2,1));
- box(56,2.09,-32.8,5.15,.13,2.02,mat(0x8a7960));
- for(const x of [54.4,56,57.6]){
-  box(x,1.22,-31.86,1.42,1.42,.095,mat(0x4a5042));
-  box(x,1.78,-31.795,.67,.06,.035,medHandle);
+ // The triage desk sits behind the side ward, visible from the narrow camera.
+ const triageX=53.2,triageZ=-35.4;
+ box(triageX,1.04,triageZ,5,2,1.85,wornSurface(0x4c4437,193,2,1));
+ box(triageX,2.09,triageZ,5.15,.13,2.02,mat(0x8a7960));
+ for(const offset of [-1.6,0,1.6]){
+  box(triageX+offset,1.22,triageZ+.94,1.42,1.42,.095,mat(0x4a5042));
+  box(triageX+offset,1.78,triageZ+1.005,.67,.06,.035,medHandle);
  }
- box(56.8,2.4,-32.9,.77,.49,.58,mat(0x932b2b));
- box(56.8,2.69,-32.6,.15,.31,.035,mat(0xe4dfcf));
- box(56.8,2.69,-32.6,.42,.095,.04,mat(0xe4dfcf));
- box(56.8,2.69,-32.91,.32,.075,.11,trim);
+ box(triageX+.8,2.4,triageZ-.1,.77,.49,.58,mat(0x932b2b));
+ box(triageX+.8,2.44,triageZ+.2,.15,.31,.035,mat(0xe4dfcf));
+ box(triageX+.8,2.44,triageZ+.205,.42,.095,.04,mat(0xe4dfcf));
+ box(triageX+.8,2.68,triageZ-.11,.32,.075,.11,trim);
  // Low-cost dropped rubble to break up the perfectly clean floor without blocking the mission corridor.
  const rubbleMat=mat(0x8d816a),paperMat=mat(0xaaa48d);
  instanced(24,rubbleMat,i=>({x:32+(i*17%26),y:.123,z:-36+(i*11%21),w:.11+(i%4)*.065,h:.048,d:.17+(i%3)*.04,rot:i*.61}));
@@ -428,7 +429,7 @@ function makeWorld(){
  wardFixture.emissive.setHex(0x9ac1c1);wardFixture.emissiveIntensity=.7;
  for(const x of [38,48])for(const z of [-34,-27])box(x,4.74,z,2.8,.13,.43,wardFixture);
  addLight(44,4.14,-29.5,0xe6f1d6,12,21);addLight(54,3.32,-33.5,0xb7d0d7,4.5,15);
- const ward=label("WARD B / TRIAGE",4.6,.36,"#414238","#d5cdb5",50);ward.position.set(56,1.56,-31.78);world.add(ward);
+ const ward=label("WARD B / TRIAGE",4.6,.36,"#414238","#d5cdb5",50);ward.position.set(triageX,1.56,triageZ+1.02);world.add(ward);
  // Patrol car, street debris and reflective safety cones form a readable landmark.
  makeCar(17,2,0x343b40,true);addLight(17,5,4,0xf0bd78,5,18);lamp(23,-8,true);
  for(const [x,z] of [[13,-2],[21,5],[23,1]]){const cone=mesh(new THREE.ConeGeometry(.33,.87,7),mat(0xa8683d),x,.5,z);cone.castShadow=true;
@@ -979,7 +980,7 @@ function updateCamera(dt){
  // Constrain the smoothed position so the camera cannot linger across a wall.
  constrainCamera(camera.position);
  const visibleOffset=clamp((camera.position.x-state.x)*yawZ-(camera.position.z-state.z)*yawX,-shoulder,shoulder)*.84;
- cameraLook.set(state.x+yawZ*visibleOffset,1.87,state.z-yawX*visibleOffset);
+ cameraLook.set(state.x+yawZ*visibleOffset,2.17,state.z-yawX*visibleOffset);
  camera.lookAt(cameraLook);
  playerVisual.visible=camera.position.distanceToSquared(cameraPivot)>1.15**2;
  fieldFlashlight.position.set(state.x,2.22,state.z);
@@ -1202,7 +1203,7 @@ function animate(){
 }
 try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);playerShadow=attachContactShadow(world,state.x,state.z);
- createNPC("mara",-14,-27,Math.PI);createNPC("vale",50.2,-30.75,Math.PI);createNPC("guard",38.7,-31.1,Math.PI*.85);
+ createNPC("mara",-14,-27,Math.PI);createNPC("vale",48.9,-30.75,Math.PI);createNPC("guard",40.2,-31.1,Math.PI*.85);
  updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();world.updateMatrixWorld(true);updateCamera(1);animate();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}
