@@ -4,6 +4,28 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.4 — Navigation, traversal tests and visual quality
+
+This remains an **independent reconstruction**, not recovered Sites v7.1 source.
+
+- Added bounded clearance-aware A* paths with no diagonal corner clipping and cached pursuit waypoints for infected.
+- Reduced road-detail rendering from 260 individual static meshes to four instanced batches.
+- Expanded the plaid survivor's straps, seams and clothing wear; improved infected silhouettes without replacing rigs.
+- Added reused geometry and clearer ambient lighting/material details in Last Stop Market and Ashford Clinic.
+- Added an optional FPS diagnostics panel (**P** on keyboard or **FPS** button) reporting sampled FPS, 95th-percentile frame time, draw calls, triangles and pixel ratio.
+- Extended GitHub Actions with a **keyboard-driven opening route** and a **390×844 mobile Chrome emulation** test.
+
+```bash
+npm install
+npx playwright install chromium
+npm run check
+npm run test:browser
+npm run test:route
+npm run test:mobile
+```
+
+**QA qualifications:** The route test travels using real keyboard movement and collisions, but uses localhost-only damage suppression to isolate traversal and test-only resolution for the clinic defense. It is not a full combat balance or human playthrough test. The emulated phone and SwiftShader measurements are not real hardware benchmarks. Use the in-game FPS overlay to measure your Chromebook and real phone.
+
 ## V0.3 browser QA and frame pacing
 
 The V0.3 branch adds a real Chromium/WebGL smoke test and a scripted nine-objective mission flow check, plus a time-step fix to reduce slow-motion movement on low-end GPUs. It generates screenshot artifacts in GitHub Actions.

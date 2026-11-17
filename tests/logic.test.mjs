@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {WORLD_LIMITS,ENTRANCES,isBlocked,lineBlocked,chaseGoal,clampFinite,restoreCheckpoint} from "../src/nav.mjs";
+import {WORLD_LIMITS,ENTRANCES,isBlocked,lineBlocked,chaseGoal,findPath,clampFinite,restoreCheckpoint} from "../src/nav.mjs";
 
 const clinicFront=[
  {x:34.25,z:-13,w:9.5,d:.7},
@@ -57,4 +57,41 @@ test("missing save data defaults to current state",()=>{
  const restored=restoreCheckpoint(null,current);
  assert.notEqual(restored,current);
  assert.equal(restored.stage,3);
+});
+
+
+test("A* routes infected around a long solid wall without passing through it",()=>{
+ const wall=[{x:0,z:0,w:1.5,d:22}];
+ const start={x:-8,z:0},goal={x:8,z:0};
+ const path=findPath(start,goal,wall,{step:1.75,clearance:.45});
+ assert(path.length>=3,"Expected route around the barrier rather than through it");
+ let last=start;
+ for(const waypoint of path){
+   assert.equal(lineBlocked(last.x,last.z,waypoint.x,waypoint.z,.45,wall),false,"Path segment intersects wall");
+   last=waypoint;
+ }
+ assert(Math.hypot(last.x-goal.x,last.z-goal.z)<.01,"A* did not reach goal");
+});
+test("A* returns direct waypoint for unobstructed path",()=>{
+ assert.deepEqual(findPath({x:-15,z:3},{x:4,z:3},[]),[{x:4,z:3}]);
+});
+test("A* enters clinic through an open entrance",()=>{
+ const clinic=[
+  {x:29.5,z:-26,w:.7,d:26},{x:60.5,z:-26,w:.7,d:26},
+  {x:34.25,z:-13,w:9.5,d:.7},{x:54.75,z:-13,w:11.5,d:.7},
+  {x:45,z:-39,w:31,d:.7}
+ ];
+ const start={x:28,z:-5},goal={x:48,z:-28},path=findPath(start,goal,clinic);
+ assert(path.length>1,"Expected a non-direct path through clinic doorway");
+ let last=start;
+ for(const point of path){assert.equal(lineBlocked(last.x,last.z,point.x,point.z,.45,clinic),false);last=point;}
+ assert(Math.hypot(last.x-goal.x,last.z-goal.z)<.1);
+});
+test("A* does not invent paths to fully enclosed space",()=>{
+ const enclosure=[{x:-2,z:0,w:.6,d:8},{x:2,z:0,w:.6,d:8},{x:0,z:-4,w:4,d:.6},{x:0,z:4,w:4,d:.6}];
+ assert.deepEqual(findPath({x:8,z:8},{x:0,z:0},enclosure),[]);
+});
+test("A* rejects invalid or excessive grid sizes",()=>{
+ assert.deepEqual(findPath({x:NaN,z:0},{x:2,z:2},[]),[]);
+ assert.deepEqual(findPath({x:0,z:0},{x:2,z:2},[{x:1,z:1,w:1,d:1}],{step:.2}),[]);
 });

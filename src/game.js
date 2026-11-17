@@ -1,5 +1,5 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
-import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,restoreCheckpoint} from "./nav.mjs";
+import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,findPath as findRoute,restoreCheckpoint} from "./nav.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -31,7 +31,7 @@ let playerVisual,marker,markerRing;
 const state={
  started:false,paused:true,ended:false,stage:0,health:100,stamina:100,thirst:80,hunger:80,
  ammo:0,mag:12,hasGun:false,supplies:0,kills:0,waveKills:0,waveStarted:false,waveTimer:0,
- x:-48,z:-24,angle:0,weapon:"crowbar",inventory:{water:1,food:2,bandage:1},
+ x:-48,z:-24,angle:Math.PI,weapon:"crowbar",inventory:{water:1,food:2,bandage:1},
  time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0
 };
 const stages=[
@@ -53,7 +53,21 @@ const cameraRay=new THREE.Raycaster();
 
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
-function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
+const unitCube=new THREE.BoxGeometry(1,1,1);
+function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
+function instanced(count,material,transform){
+ const group=new THREE.InstancedMesh(unitCube,material,count);
+ const dummy=new THREE.Object3D();
+ for(let i=0;i<count;i++){
+  const data=transform(i);
+  dummy.position.set(data.x,data.y,data.z);
+  dummy.scale.set(data.w,data.h,data.d);
+  dummy.rotation.set(0,data.rot||0,0);
+  dummy.updateMatrix();group.setMatrixAt(i,dummy.matrix);
+ }
+ group.instanceMatrix.needsUpdate=true;group.castShadow=false;group.receiveShadow=false;
+ world.add(group);return group;
+}
 function cyl(x,y,z,r,depth,material,group=world){const m=mesh(new THREE.CylinderGeometry(r,r,depth,9),material,x,y,z,group);m.castShadow=true;return m}
 function sphere(x,y,z,r,material,group=world){const m=mesh(new THREE.SphereGeometry(r,10,8),material,x,y,z,group);m.castShadow=true;return m}
 function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);return l}
@@ -115,9 +129,9 @@ function makeWorld(){
  box(0,.08,-8,145,.17,.32,dust);box(0,.08,8,145,.17,.32,dust);
  for(let x=-66;x<67;x+=9)box(x,.063,0,4,.018,.15,mat(0xc7b48b));
  // worn asphalt seam lines and cracks
- for(let i=0;i<155;i++){const x=rand(-69,69),z=rand(-7.6,7.6),len=rand(.24,1.9);
- const crack=box(x,.062,z,len,.012,.025,mat(0x131819));crack.rotation.y=rand(-1.1,1.1);}
- for(let i=0;i<105;i++){const x=rand(-68,68),z=rand(-46,39),size=rand(.09,.44);box(x,.06,z,size,.045,size,mat(i%3===0?0x6e6c5c:0x373d39));}
+ instanced(155,mat(0x171a1a),()=>({x:rand(-69,69),y:.066,z:rand(-7.6,7.6),w:rand(.24,1.9),h:.012,d:.025,rot:rand(-1.1,1.1)}));
+ for(const shade of [0x6e6c5c,0x373d39,0x444b46])
+  instanced(35,mat(shade),()=>{const size=rand(.09,.44);return {x:rand(-68,68),y:.07,z:rand(-46,39),w:size,h:.045,d:size};});
  for(let i=0;i<17;i++){const x=rand(-61,64),z=rand(-6.4,6.4);
   const puddle=mesh(new THREE.CircleGeometry(1,20),mat(0x202d31,.19,.22),x,.066,z);
   puddle.rotation.x=-Math.PI/2;puddle.scale.set(rand(.25,1.5),rand(.18,.7),1);
@@ -142,6 +156,11 @@ function makeWorld(){
   box(x,y,-13.48,rand(.08,.52),rand(.025,.15),.012,scuffMat);
  }
  box(-11,3.15,-13.47,9,.07,.05,mat(0x715f4c));
+ // Worn panels and improvised shop notes establish detail at player height.
+ for(const [x,z] of [[-21,-23],[-21,-34],[-1,-31]]){
+   box(x,1.55,z,.08,1.35,1.3,mat(0x6e6455));
+   box(x+.08,2.1,z,.035,.12,1.05,mat(0x9c8060));
+ }
  // counter, cash register, shelves, stock
  box(-15,.82,-29,7,1.65,1.25,mat(0x594734));box(-15,1.7,-29,7,.14,1.35,mat(0x88745c));
  box(-12,1.93,-29,1.1,.45,.85,dark);box(-12,2.16,-29,.9,.09,.48,glass);
@@ -170,6 +189,16 @@ function makeWorld(){
  box(x,1.04,z,3,.09,1,mat(0x909f9b));
  for(let j=-1;j<=1;j++)cyl(x+j*.65,1.35,z,.14,.5,mat(0x8a9998));
  }}
+ // Reuse simple geometry as recognizable clinic details without new mesh imports.
+ const medCabinet=mat(0x87938e),medTrim=mat(0xb8c4bd),red=mat(0x9b443e);
+ for(const [x,z] of [[39,-36],[50,-35],[35,-19],[56,-20]]){
+   box(x,2.0,z,1.35,1.55,.40,medCabinet);
+   box(x,2.75,z,1.4,.11,.47,medTrim);
+   box(x,2.0,z-.23,.18,.65,.06,red);
+   box(x,2.0,z-.24,.65,.18,.07,red);
+ }
+ for(const x of [36,54]){box(x,1.45,-32.0,.10,1.3,.10,medTrim);
+   cyl(x,2.15,-32,.24,.11,medTrim);}
  // privacy curtains near medical beds
  for(let x of [36,54]){const curtain=box(x,2.7,-31,.07,2.65,5,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
  for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,mat(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
@@ -229,15 +258,38 @@ function humanoid(kind="player"){
   box(0,-.89,-.10,.37,.20,.55,dark,false,leg);limbs.push(leg);
  }
  if(kind==="player"){
-  box(0,1.56,.38,.73,.9,.27,mat(0x5f5140),false,group);
-  for(let s of [-1,1]){const strap=box(s*.27,1.66,-.26,.09,.86,.09,mat(0x87765b),false,group);strap.rotation.z=s*.12;}
-  box(.47,1.05,-.09,.14,.5,.13,mat(0x858b84,.4,.7),false,group);
+  const canvas=mat(0x514d42),seam=mat(0x8a8576),worn=mat(0x3d4246),metal=mat(0x8d9494,.38,.6);
+  box(0,1.56,.38,.73,.94,.28,canvas,false,group);
+  for(let side of [-1,1]){
+   const strap=box(side*.27,1.66,-.26,.10,.90,.09,seam,false,group);strap.rotation.z=side*.12;
+   box(side*.26,1.78,-.335,.16,.12,.045,metal,false,group);
+   box(side*.30,1.40,.53,.11,.28,.06,seam,false,group);
+  }
+  box(0,1.16,.55,.55,.32,.10,canvas,false,group);
+  box(0,1.38,.544,.48,.08,.08,seam,false,group);
+  box(.47,1.05,-.09,.14,.5,.13,metal,false,group);
+  // Existing animation groups are preserved: elbow and knee wear follows their rig.
+  for(const idx of [0,2])box(0,-.55,-.17,.30,.25,.06,worn,false,limbs[idx]);
+  for(const idx of [1,3])box(0,-.58,-.19,.31,.25,.065,worn,false,limbs[idx]);
  }
  if(kind==="vale"){box(0,1.36,-.28,.52,.75,.07,mat(0xe1e4da),false,group);box(0,1.49,-.35,.09,.3,.07,mat(0x35727b),false,group);}
  if(kind==="mara"){box(0,1.65,-.29,.60,.74,.12,mat(0x473f37),false,group);}
- if(kind==="brute"){group.scale.set(1.32,1.27,1.24);torso.scale.x=1.35;head.scale.x=1.12;}
- if(kind==="runner"){torso.rotation.x=-.30;head.position.z=-.20;group.scale.set(.91,1,.92);}
- if(kind==="spitter"){const glow=mat(0x6b9d43);glow.emissive=new THREE.Color(0x3a9e22);glow.emissiveIntensity=.85;box(0,1.65,-.31,.39,.48,.11,glow,false,group);}
+ if(kind==="brute"){
+  group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x=1.12;
+  const bulk=mat(0x655e54);
+  for(const side of [-1,1]){sphere(side*.62,2.02,.02,.38,bulk,group);box(side*.60,1.63,.20,.20,.48,.20,bulk,false,group);}
+ }
+ if(kind==="runner"){
+  torso.rotation.x=-.30;head.position.z=-.20;group.scale.set(.91,1,.92);
+  limbs[0].rotation.z=.25;limbs[2].rotation.z=-.30;
+  box(-.38,1.69,-.30,.25,.40,.08,mat(0x745751),false,group);
+ }
+ if(kind==="spitter"){
+  const glow=mat(0x6b9d43);glow.emissive=new THREE.Color(0x3a9e22);glow.emissiveIntensity=.85;
+  box(0,1.65,-.31,.39,.48,.11,glow,false,group);
+  for(const side of [-1,1]){sphere(side*.42,1.35,-.28,.21,glow,group);}
+  sphere(0,2.02,-.29,.18,glow,group);
+ }
  if(zombie){box(0,1.57,-.29,.45,.22,.03,mat(0x482c2a),false,group);}
  group.userData={limbs,head,torso};
  return group;
@@ -247,7 +299,8 @@ function spawnEnemy(type,x,z,ambush=false){
  const c=humanoid(type);c.position.set(x,0,z);world.add(c);
  enemies.push({type,mesh:c,x,z,hp:type==="brute"?175:type==="runner"?52:75,max:type==="brute"?175:type==="runner"?52:75,
  speed:type==="runner"?4.25:type==="brute"?1.6:type==="spitter"?1.9:2.25,
- cd:rand(.1,1.0),phase:rand(0,10),dead:false,death:0,ambush});
+ cd:rand(.1,1.0),phase:rand(0,10),dead:false,death:0,ambush,
+ route:[],routeTimer:rand(.05,.45),routeTarget:{x:NaN,z:NaN}});
 }
 function spawnAmbient(){spawnEnemy("walker",-27,3);spawnEnemy("runner",5,13);spawnEnemy("spitter",32,11);}
 function makeMarker(){
@@ -291,7 +344,7 @@ function startWave(){state.waveStarted=true;state.waveKills=0;state.waveTimer=0;
  toast("CLINIC UNDER ATTACK");}
 function victory(){state.ended=true;state.paused=true;$("end-label").textContent="OPENING ROUTE CLEARED";$("end-title").textContent="FIRST NIGHT SURVIVED.";$("end-message").textContent="You reached the ward, found allies, and secured Ashford Clinic. This is the end of the reconstruction opening slice.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(680,.6);}
 function gameOver(){state.ended=true;state.paused=true;$("end-label").textContent="SIGNAL LOST";$("end-title").textContent="YOU DID NOT SURVIVE.";$("end-message").textContent="The dead claimed another survivor. Return to the start and try again.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(125,.6,"sawtooth",.08);}
-function takeDamage(amount){if(state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
+function takeDamage(amount){if(state.qaNoDamage||state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
 function melee(){if(state.attackTime>0||!state.started||state.paused)return;state.attackTime=.56;tone(175,.1,"triangle",.06);
  const p=pos();const facing=aimDirection();const target=enemies.filter(e=>!e.dead&&dist(e,p)<2.9)
  .filter(e=>V(e.x-p.x,0,e.z-p.z).normalize().dot(facing)>.22&&!lineBlocked(p.x,p.z,e.x,e.z,.11))
@@ -320,18 +373,23 @@ function updateEnemies(dt){
  const e=enemies[i];if(e.dead){e.death-=dt;e.mesh.rotation.z=Math.min(1.4,e.mesh.rotation.z+dt*2.3);e.mesh.position.y=-Math.max(0,1.7-e.death)*.20;if(e.death<=0){world.remove(e.mesh);enemies.splice(i,1);}continue;}
  e.phase+=dt*(e.type==="runner"?9:5);e.cd-=dt;const d=dist(p,e);
  if(d<38&&d>1.2&&state.started&&!state.paused){
-  const goal=chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
+  e.routeTimer-=dt;
+  // A* runs when the target moves meaningfully or on a spaced cooldown.
+  // Direct unobstructed pursuit remains cheap, while static walls use cached waypoints.
+  if(e.routeTimer<=0||dist(p,e.routeTarget)>3){
+   e.route=findRoute(e,p,obstacles,{step:1.75,clearance:.45,maxVisited:4400});
+   if(!e.route.length)e.route=findRoute(e,chaseGoal(e,p),obstacles,{step:1.75,clearance:.45,maxVisited:2200});
+   e.routeTimer=rand(.85,1.45);
+   e.routeTarget={x:p.x,z:p.z};
+  }
+  while(e.route.length>1&&dist(e,e.route[0])<.6)e.route.shift();
+  const goal=e.route[0]||chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
   const dx=(goal.x-e.x)/gd,dz=(goal.z-e.z)/gd;
   let nx=e.x+dx*speed,nz=e.z+dz*speed;
-  // Avoid tunneling through buildings and guide attackers through entrances.
-  if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;}
+  if(!blocked(nx,nz,.42)&&!lineBlocked(e.x,e.z,nx,nz,.42)){e.x=nx;e.z=nz;}
   else if(!blocked(nx,e.z,.42)){e.x=nx;}
   else if(!blocked(e.x,nz,.42)){e.z=nz;}
-  else {
-   const side=V(-dz,0,dx);
-   for(const sign of [1,-1]){nx=e.x+side.x*sign*speed;nz=e.z+side.z*sign*speed;
-     if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;break;}}
-  }
+  else {e.routeTimer=0;}
   e.mesh.rotation.y=Math.atan2(-dx,-dz);
  }
  if(d<1.55&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
@@ -418,6 +476,19 @@ function updateCamera(dt){
  if(hits.length)desired.copy(pivot).addScaledVector(dir,Math.max(1.5,hits[0].distance-.35));
  camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
 }
+function togglePerf(){
+ $("perf-panel").hidden=!$("perf-panel").hidden;
+ if(!$("perf-panel").hidden)updatePerfReadout();
+}
+function updatePerfReadout(){
+ if($("perf-panel").hidden)return;
+ const frames=qaFrameMs.slice().sort((a,b)=>a-b),n=frames.length;
+ const avg=n?frames.reduce((a,b)=>a+b,0)/n:0;
+ const fps=avg?Math.round(1000/avg):0;
+ const p95=n?Math.round(frames[Math.min(n-1,Math.floor(n*.95))]):0;
+ $("perf-numbers").textContent="FPS (sample): "+fps+"\nFrame p95: "+p95+" ms\nDraw calls: "+renderer.info.render.calls+
+ "\nTriangles: "+renderer.info.render.triangles+"\nPixel ratio: "+renderer.getPixelRatio().toFixed(2);
+}
 function applyQuality(mode,notify=false){
  qualityMode=mode==="performance"?"performance":"auto";
  const low=qualityMode==="performance";
@@ -459,7 +530,7 @@ function start(){state.started=true;state.paused=false;$("intro").classList.remo
  if(matchMedia("(pointer:coarse)").matches||innerWidth<750)$("mobile-controls").hidden=false;
  loadGame();setMarker();try{tone(480,.15);}catch(e){}}
 function controls(){
- $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;
+ $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
  $("quality-button").onclick=()=>applyQuality(qualityMode==="auto"?"performance":"auto",true);
  try{qualityMode=localStorage.getItem("ashfordGraphicsV02")||"auto";}catch(e){}
@@ -471,7 +542,7 @@ function controls(){
  if(e.repeat)return;
  if(e.code==="Escape"){if($("pack-modal").classList.contains("visible")){resume();return;}if(activeDialog)return;pause();}
  if(e.code==="KeyI"){if($("pack-modal").classList.contains("visible"))resume();else showPack();}
- if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="Space")melee();
+ if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="Space")melee();
  });
  addEventListener("keyup",e=>{keys[e.code]=false;});
  addEventListener("blur",()=>{for(const k in keys)keys[k]=false;touch.x=0;touch.y=0;touch.sprint=false;});
@@ -496,7 +567,12 @@ function controls(){
 function installLocalQA(){
  if(location.hostname!=="127.0.0.1"||new URLSearchParams(location.search).get("__qa")!=="1")return;
  Object.defineProperty(window,"__ashfordQA",{configurable:false,value:Object.freeze({
-  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z};},
+  snapshot(){return {stage:state.stage,health:state.health,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,ambush:e.ambush}))};},
+  perf(){const frames=[...qaFrameMs].sort((a,b)=>a-b);const n=frames.length,avg=n?frames.reduce((x,y)=>x+y,0)/n:0;
+   return {sampleCount:n,averageFPS:avg?1000/avg:null,p50FrameMs:n?frames[Math.floor(n*.5)]:null,p95FrameMs:n?frames[Math.min(n-1,Math.floor(n*.95))]:null,
+     drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio()};
+  },
+  noDamage(on){state.qaNoDamage=Boolean(on);},
   teleport(x,z){if(!Number.isFinite(x)||!Number.isFinite(z))throw new Error("Invalid QA location");state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);playerVisual.position.set(state.x,0,state.z);},
   finishWave(){if(state.stage!==7)throw new Error("Clinic assault is not active");
    for(const enemy of [...enemies].filter(e=>e.ambush&&!e.dead).slice(0,4)){hurtEnemy(enemy,enemy.hp+1);}
@@ -504,11 +580,14 @@ function installLocalQA(){
  })});
 }
 const clock=new THREE.Clock();let fpsFrames=0,fpsLast=0;
+const qaFrameMs=[];let perfPanelElapsed=0;
 function animate(){
  requestAnimationFrame(animate);
  // Simulate up to 250 ms of wall-clock time using small steps so weak GPUs
  // don't slow player movement or tunnel through thin walls.
- const frameDt=Math.min(clock.getDelta(),.25);
+ const elapsed=Math.max(.001,clock.getDelta());
+ const frameDt=Math.min(elapsed,.25);
+ if(state.started&&!state.paused&&!state.ended){qaFrameMs.push(elapsed*1000);if(qaFrameMs.length>180)qaFrameMs.shift();}
  if(state.started&&!state.paused&&!state.ended){
   const count=Math.max(1,Math.ceil(frameDt/.045)),dt=frameDt/count;
   for(let step=0;step<count&&state.started&&!state.paused&&!state.ended;step++){
@@ -520,8 +599,9 @@ function animate(){
  }
  if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
  updateCamera(frameDt);drawMap();renderer.render(scene,camera);
+ perfPanelElapsed+=elapsed;if(perfPanelElapsed>.9){updatePerfReadout();perfPanelElapsed=0;}
  // Measure actual elapsed frame time rather than capped physics delta.
- fpsFrames++;fpsLast+=frameDt;
+ fpsFrames++;fpsLast+=elapsed;
  if(fpsLast>=5){
   const fps=fpsFrames/fpsLast;
   if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}
