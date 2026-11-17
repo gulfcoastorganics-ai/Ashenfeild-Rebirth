@@ -112,7 +112,9 @@ export function findPath(start,goal,obstacles=[],options={}){
    for(const [dx,dz,cost] of offsets){
      const nx=x+dx,nz=z+dz;if(!open(nx,nz))continue;
      if(dx&&dz&&(!open(x+dx,z)||!open(x,z+dz)))continue;
-     const nid=index(nx,nz),next=g[id]+cost;if(visited[nid]||next>=g[nid]-1e-6)continue;
+     const nid=index(nx,nz),from=point(id),to=point(nid);
+     if(lineBlocked(from.x,from.z,to.x,to.z,r,obstacles,b))continue;
+     const next=g[id]+cost;if(visited[nid]||next>=g[nid]-1e-6)continue;
      g[nid]=next;prev[nid]=id;push(nid,next+h(nid));
    }
  }
