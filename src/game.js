@@ -68,14 +68,14 @@ const unitCube=new THREE.BoxGeometry(1,1,1);
 const unitSphere=new THREE.SphereGeometry(1,10,8);
 const unitCylinder=new THREE.CylinderGeometry(1,1,1,9);
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
-function instanced(count,material,transform){
- const group=new THREE.InstancedMesh(unitCube,material,count);
+function instanced(count,material,transform,geometry=unitCube){
+ const group=new THREE.InstancedMesh(geometry,material,count);
  const dummy=new THREE.Object3D();
  for(let i=0;i<count;i++){
   const data=transform(i);
   dummy.position.set(data.x,data.y,data.z);
   dummy.scale.set(data.w,data.h,data.d);
-  dummy.rotation.set(0,data.rot||0,0);
+  dummy.rotation.set(data.rx||0,data.rot||0,data.rz||0);
   dummy.updateMatrix();group.setMatrixAt(i,dummy.matrix);
  }
  group.instanceMatrix.needsUpdate=true;group.castShadow=false;group.receiveShadow=false;
@@ -140,15 +140,15 @@ function makeWorld(){
  // Asphalt, sidewalk, gutters, and lane paint
  floor(0,0,145,16,asphalt);floor(0,-10,145,4,concrete);floor(0,10,145,4,concrete);
  box(0,.08,-8,145,.17,.32,dust);box(0,.08,8,145,.17,.32,dust);
- for(let x=-66;x<67;x+=9)box(x,.063,0,4,.018,.15,mat(0xc7b48b));
+ instanced(15,mat(0xc7b48b),i=>({x:-66+i*9,y:.063,z:0,w:4,h:.018,d:.15}));
  // worn asphalt seam lines and cracks
  instanced(155,mat(0x171a1a),()=>({x:rand(-69,69),y:.066,z:rand(-7.6,7.6),w:rand(.24,1.9),h:.012,d:.025,rot:rand(-1.1,1.1)}));
  for(const shade of [0x6e6c5c,0x373d39,0x444b46])
   instanced(35,mat(shade),()=>{const size=rand(.09,.44);return {x:rand(-68,68),y:.07,z:rand(-46,39),w:size,h:.045,d:size};});
- for(let i=0;i<17;i++){const x=rand(-61,64),z=rand(-6.4,6.4);
-  const puddle=mesh(new THREE.CircleGeometry(1,20),mat(0x202d31,.19,.22),x,.066,z);
-  puddle.rotation.x=-Math.PI/2;puddle.scale.set(rand(.25,1.5),rand(.18,.7),1);
- }
+ instanced(17,mat(0x202d31,.19,.22),()=>({
+  x:rand(-61,64),y:.066,z:rand(-6.4,6.4),
+  w:rand(.25,1.5),h:rand(.18,.7),d:1,rx:-Math.PI/2
+ }),new THREE.CircleGeometry(1,20));
  // Safehouse
  house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:mat(0x505452)});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
@@ -165,9 +165,10 @@ function makeWorld(){
  windowPanel(-20,2.25,-13.55,4,2.4);windowPanel(-2,2.25,-13.55,4,2.4);
  // Hand-height scuffs and grime at the storefront, intentionally low-cost decals.
  const scuffMat=new THREE.MeshStandardMaterial({color:0x312b26,transparent:true,opacity:.42,depthWrite:false,roughness:1});
- for(let i=0;i<26;i++){const x=rand(-23,-18.1)+(i%2?0:rand(16,21)),y=rand(1.1,3.2);
-  box(x,y,-13.48,rand(.08,.52),rand(.025,.15),.012,scuffMat);
- }
+ instanced(26,scuffMat,i=>({
+  x:rand(-23,-18.1)+(i%2?0:rand(16,21)),y:rand(1.1,3.2),z:-13.48,
+  w:rand(.08,.52),h:rand(.025,.15),d:.012
+ }));
  box(-11,3.15,-13.47,9,.07,.05,mat(0x715f4c));
  // Worn panels and improvised shop notes establish detail at player height.
  for(const [x,z] of [[-21,-23],[-21,-34],[-1,-31]]){
@@ -177,14 +178,19 @@ function makeWorld(){
  // counter, cash register, shelves, stock
  box(-15,.82,-29,7,1.65,1.25,mat(0x594734));box(-15,1.7,-29,7,.14,1.35,mat(0x88745c));
  box(-12,1.93,-29,1.1,.45,.85,dark);box(-12,2.16,-29,.9,.09,.48,glass);
+ const stockColors=[0x7f6651,0x607a71,0x958456,0x444f5d],stockGroups=stockColors.map(()=>[]);
  for(let x of [-6,-2,0]){if(x===0)continue;
   for(let z of [-34,-27,-21]){if(x===-6 && z===-27)continue;
    box(x,1.0,z,1.35,2.0,3.0,mat(0x454840));
    for(let row=0;row<3;row++){box(x,1.68-row*.55,z,1.5,.12,3.12,mat(0x6a6554));
-    for(let k=0;k<4;k++){const b=box(x+rand(-.32,.32),1.85-row*.55,z-1.1+k*.72,.32,.32,.25,mat([0x7f6651,0x607a71,0x958456,0x444f5d][(row+k)%4]));b.rotation.y=rand(-.2,.2);}
+    for(let k=0;k<4;k++)stockGroups[(row+k)%4].push({
+      x:x+rand(-.32,.32),y:1.85-row*.55,z:z-1.1+k*.72,
+      w:.32,h:.32,d:.25,rot:rand(-.2,.2)
+    });
    }
   }
  }
+ stockGroups.forEach((items,i)=>instanced(items.length,mat(stockColors[i]),j=>items[j]));
  box(-7,.5,-29,1.3,1,1.3,mat(0x6b6049));box(-7,1.03,-29,1.35,.11,1.35,mat(0xa28a5b));
  addLight(-15,4.15,-27,0xffb16d,9,23);
  addLight(-5,4,-21,0xb77d44,4,15);
@@ -224,9 +230,18 @@ function makeWorld(){
 
  // ambient street furniture
  for(let x of [-56,-27,0,34,65])lamp(x,9,x%2===0);
- for(let i=0;i<19;i++)makeTree(rand(-65,65),Math.random()>.5?rand(16,35):rand(-58,-44));
- for(let i=0;i<20;i++){let x=rand(-67,67),z=rand(11,23);if(i%3===0)z=rand(-48,-42);
- box(x,.35,z,rand(.3,1.5),rand(.4,1.2),rand(.3,1.1),mat([0x5b5b52,0x3d4848,0x796352][i%3]));}
+ const trees=Array.from({length:19},()=>({x:rand(-65,65),z:Math.random()>.5?rand(16,35):rand(-58,-44)}));
+ instanced(trees.length,mat(0x55483a),i=>({...trees[i],y:1.35,w:.25,h:2.7,d:.25}),unitCylinder);
+ for(let layer=0;layer<3;layer++){
+  const canopies=trees.map(t=>({x:t.x+rand(-.6,.6),y:3.2+rand(-.3,.7),z:t.z+rand(-.5,.5),r:rand(.9,1.5)}));
+  instanced(canopies.length,mat([0x47574d,0x59604b,0x3d4c45][layer]),i=>({
+   x:canopies[i].x,y:canopies[i].y,z:canopies[i].z,w:canopies[i].r,h:canopies[i].r,d:canopies[i].r
+  }),unitSphere);
+ }
+ for(let shade=0;shade<3;shade++)instanced(shade===0?7:shade===1?7:6,mat([0x5b5b52,0x3d4848,0x796352][shade]),i=>({
+  x:rand(-67,67),y:.35,z:shade===0?rand(-48,-42):rand(11,23),
+  w:rand(.3,1.5),h:rand(.4,1.2),d:rand(.3,1.1),rot:rand(-.2,.2)
+ }));
  for(let x of [-65,69])makeCar(x,17,0x675b4e,false);
  const dustPositions=new Float32Array(240*3);
  for(let i=0;i<240;i++){dustPositions[i*3]=rand(-65,65);dustPositions[i*3+1]=rand(.4,4.5);dustPositions[i*3+2]=rand(-39,22);}
