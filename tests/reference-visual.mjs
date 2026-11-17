@@ -38,20 +38,26 @@ try{
  await page.locator("#light-button").click();
  assert.equal(await page.locator("#light-button").getAttribute("aria-pressed"),"false");
  await mkdir(resolve(root,"artifacts"),{recursive:true});
- await page.screenshot({path:resolve(root,"artifacts","v08-reference-clinic.png"),animations:"disabled"});
+ await page.screenshot({path:resolve(root,"artifacts","v010-reference-clinic.png"),animations:"disabled"});
  const clinic=await page.evaluate(()=>window.__ashfordQA.perf());
  assert(clinic.drawCalls>0&&clinic.drawCalls<480,"Clinic render budget exceeded: "+clinic.drawCalls);
  assert(clinic.geometries<190,"Too many geometries: "+clinic.geometries);
  await page.evaluate(()=>window.__ashfordQA.referenceView(-11,-26,0,2));
  await page.waitForTimeout(700);
- await page.screenshot({path:resolve(root,"artifacts","v08-reference-market.png"),animations:"disabled"});
+ await page.screenshot({path:resolve(root,"artifacts","v010-reference-market.png"),animations:"disabled"});
  const market=await page.evaluate(()=>window.__ashfordQA.perf());
  assert(market.drawCalls>0&&market.drawCalls<480);
+ await page.setViewportSize({width:602,height:560});
+ await page.evaluate(()=>window.__ashfordQA.referenceView(44,-25.7,0,6));
+ await page.waitForTimeout(650);
+ assert(await page.locator("#mobile-controls").isHidden(),"Touch controls obstruct the narrow desktop view");
+ assert(await page.locator(".weapon-card").isVisible(),"Weapon card missing in the narrow desktop view");
+ await page.screenshot({path:resolve(root,"artifacts","v010-reference-clinic-narrow.png"),animations:"disabled"});
  assert.deepEqual(errors,[]);
- const result={description:"V0.8 reference-aligned clinic/market visual validation",environment:"Chromium headless SwiftShader (NOT real GPU)",clinic,market};
- await writeFile(resolve(root,"artifacts","v08-reference-audit.json"),JSON.stringify(result,null,2));
+ const result={description:"V0.10 reference-aligned clinic/market visual validation",environment:"Chromium headless SwiftShader (NOT real GPU)",clinic,market};
+ await writeFile(resolve(root,"artifacts","v010-reference-audit.json"),JSON.stringify(result,null,2));
  console.log("REFERENCE CLINIC "+JSON.stringify(clinic));
  console.log("REFERENCE MARKET "+JSON.stringify(market));
- console.log("PASS V0.8 REFERENCE: HUD, functional light toggle and both 3D scenes render within resource budgets");
+ console.log("PASS V0.10 REFERENCE: HUD, functional light toggle, narrow desktop and render budgets");
 }catch(err){console.error("REFERENCE VISUAL QA FAILED:",err.stack||err);process.exitCode=1;}
 finally{await browser?.close().catch(()=>{});await new Promise(done=>server.close(done));}

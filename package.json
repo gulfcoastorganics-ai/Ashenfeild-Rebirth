@@ -1,7 +1,7 @@
 {
   "name": "ashford-rebirth-reconstruction",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "description": "Independent browser survival game reconstruction; not recovered Sites v7.1 source",
   "scripts": {

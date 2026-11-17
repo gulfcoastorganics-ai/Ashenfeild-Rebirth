@@ -24,7 +24,7 @@ const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,e
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x252e32);
 scene.fog=new THREE.FogExp2(0x2e393c,.013);
-const camera=new THREE.PerspectiveCamera(64,innerWidth/innerHeight,.1,210);
+const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,210);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
 renderer.setSize(innerWidth,innerHeight);
@@ -39,7 +39,7 @@ const moon=new THREE.DirectionalLight(0xddd5c1,1.8);moon.position.set(-21,40,22)
 const world=new THREE.Group();scene.add(world);
 const obstacles=[],enemies=[],effects=[],lamps=[],localLights=[];
 let lightBudgetElapsed=0;
-let playerVisual,marker,markerRing;
+let playerVisual,playerShadow,marker,markerRing,markerDiamond;
 const state={
  started:false,paused:true,ended:false,stage:0,health:100,stamina:100,thirst:80,hunger:80,
  ammo:0,mag:12,hasGun:false,supplies:0,kills:0,waveKills:0,waveStarted:false,waveTimer:0,
@@ -70,7 +70,7 @@ let dustParticles;
 let gaitPhase=0,gaitBlend=0;
 const solidMeshes=[];
 const cameraRay=new THREE.Raycaster();
-const cameraPivot=V(0,0,0),cameraDesired=V(0,0,0),cameraDirection=V(0,0,0),cameraHits=[];
+const cameraPivot=V(0,0,0),cameraDesired=V(0,0,0),cameraDirection=V(0,0,0),cameraLook=V(0,0,0),cameraHits=[];
 const fieldFlashlight=new THREE.SpotLight(0xe0e6c4,4.2,24,Math.PI/6,.52,1.8);
 fieldFlashlight.castShadow=false;fieldFlashlight.visible=false;scene.add(fieldFlashlight);
 const fieldFlashlightTarget=new THREE.Object3D();scene.add(fieldFlashlightTarget);
@@ -186,11 +186,15 @@ function referenceClinicFloor(){
  const size=256;
  for(let row=0;row<2;row++)for(let col=0;col<2;col++){
   const x=col*size,y=row*size,light=(col+row)%2===0;
-  ctx.fillStyle=light?"#a7a79d":"#575b58";ctx.fillRect(x,y,size,size);
-  ctx.fillStyle="rgba(17,20,21,.28)";ctx.fillRect(x,y,3,size);ctx.fillRect(x,y,size,3);
+  ctx.fillStyle=light?(row===0?"#aca395":"#a19a8d"):(row===0?"#595b57":"#525454");ctx.fillRect(x,y,size,size);
+  const wear=ctx.createRadialGradient(x+88,y+110,4,x+88,y+110,173);
+  wear.addColorStop(0,"rgba(185,169,143,.22)");wear.addColorStop(.63,"rgba(124,108,89,.07)");wear.addColorStop(1,"rgba(33,31,27,.23)");
+  ctx.fillStyle=wear;ctx.fillRect(x,y,size,size);
+  ctx.fillStyle="rgba(21,24,21,.67)";ctx.fillRect(x,y,3,size);ctx.fillRect(x,y,size,3);
+  ctx.fillStyle="rgba(213,207,187,.18)";ctx.fillRect(x+4,y+4,1,size-7);ctx.fillRect(x+4,y+4,size-7,1);
   for(let k=0;k<1700;k++){
    const px=x+noise()*size,py=y+noise()*size;
-   ctx.fillStyle=noise()>.56?"rgba(30,33,29,.085)":"rgba(216,204,178,.07)";
+   ctx.fillStyle=noise()>.56?"rgba(30,33,29,.16)":"rgba(216,204,178,.12)";
    const l=.3+noise()*5;ctx.fillRect(px,py,l,l*(.2+noise()));
   }
   for(let k=0;k<11;k++){
@@ -256,6 +260,21 @@ function marketWindowMaterial(){
  ctx.fillStyle="rgba(158,191,183,.15)";
  ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(90,0);ctx.lineTo(235,256);ctx.lineTo(159,256);ctx.fill();
  return new THREE.MeshStandardMaterial({map,roughness:.48,metalness:.15});
+}
+function clinicCeiling(){
+ const ceiling=wornSurface(0x464940,155,5,4);
+ const underside=mesh(new THREE.PlaneGeometry(30.2,25.4),ceiling,45,4.91,-26);
+ underside.rotation.x=Math.PI/2;
+ const runners=mat(0x272d27,.88);
+ for(const z of [-17,-24,-31,-38])box(45,4.82,z,29.7,.12,.16,runners);
+ const canvas=document.createElement("canvas");canvas.width=canvas.height=64;
+ const context=canvas.getContext("2d");
+ const wash=context.createRadialGradient(32,32,3,32,32,31);
+ wash.addColorStop(0,"rgba(188,208,161,.67)");wash.addColorStop(.5,"rgba(156,182,139,.23)");wash.addColorStop(1,"rgba(156,182,139,0)");
+ context.fillStyle=wash;context.fillRect(0,0,64,64);
+ const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;
+ const spill=mesh(new THREE.PlaneGeometry(9.3,2.6),new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}),45,4.897,-30.05);
+ spill.rotation.x=Math.PI/2;spill.receiveShadow=false;
 }
 function makeWorld(){
  // Single reusable 256px procedural roadway texture; detail without external assets.
@@ -330,8 +349,9 @@ function makeWorld(){
  const redCross=label("+",2.6,2.3,"#e7ded5","#ab3732",140);redCross.position.set(45,6.45,-12.8);world.add(redCross);
  // Reference-guided interior: grimy off-white upper wall, deep hospital teal belt and gray kick panel.
  // All panels are decorative; collision still uses the original solid house walls.
- const clinicTeal=wornSurface(0x1e4d4f,427,1,1),clinicUpper=wornSurface(0xa8aca1,428,1,1);
- const clinicLower=mat(0x747b78),trim=mat(0x272f2c),door=mat(0x4b696b,.82);
+ const clinicTeal=wornSurface(0x153d46,427,4,1),clinicUpper=wornSurface(0x989b8f,428,4,1);
+ const clinicLower=wornSurface(0x676961,429,5,1),trim=mat(0x343a32),door=wornSurface(0x4b6565,430,1,1);
+ const medHandle=mat(0x979582,.53,.35);
  for(const [y,h,material] of [[.52,1.0,clinicLower],[2.08,2.15,clinicTeal],[4.09,1.64,clinicUpper]]){
   box(45,y,-38.59,29.3,h,.075,material);
   box(29.91,y,-26,.075,h,24.3,material);
@@ -339,29 +359,42 @@ function makeWorld(){
  }
  box(45,1.0,-38.50,29.3,.075,.095,trim);
  box(45,3.18,-38.50,29.3,.085,.095,trim);
+ for(const x of [29.97,60.02])for(const y of [1.0,3.18])box(x,y,-26,.095,.08,24.2,trim);
+ const rails=mat(0x8a8067);
+ for(const x of [35.7,53.1]){
+  box(x,1.72,-38.43,8.8,.115,.13,rails);
+  for(const bolt of [-3.5,0,3.5])box(x+bolt,1.72,-38.33,.075,.135,.085,trim);
+ }
  // Central gray steel door, deep frame, threshold and brass pull.
  box(44,1.63,-38.36,3.6,3.18,.17,trim);
  box(44,1.58,-38.22,3.22,2.94,.11,door);
  box(44,2.43,-38.135,1.3,.44,.032,mat(0x32494b));
  box(45.16,1.58,-38.12,.12,.34,.08,mat(0xb7a178,.46,.72));
- box(44,.15,-37.91,3.65,.07,.62,mat(0x383c38));
+ box(44,.15,-37.80,3.59,.07,.91,mat(0x383c38));
+ box(44,.189,-37.39,3.59,.015,.072,mat(0x75705a,.69,.19));
  for(const [x,name] of [[36.3,"01 / SUPPLIES"],[54.1,"02 / FIELD MEDIC"]]){
   const sign=label(name,5.8,.62,"#323b36","#e5d7a3",58);
   sign.position.set(x,3.33,-38.39);world.add(sign);
  }
  const access=label("TRIAGE ACCESS",3.1,.52,"#313e3e","#d8cfab",58);
  access.position.set(44,3.55,-38.26);world.add(access);
- // Suspended long fluorescent with white emissive core and olive metal housing.
- box(45,4.79,-29,7.0,.18,.72,mat(0x414743,.72,.13));
+ clinicCeiling();
+ // The illuminated diffuser remains readable with shadows disabled.
+ box(45,4.77,-30.05,7.0,.17,.36,mat(0x414743,.72,.13));
  const ceilingGlow=matUnique(0xecebd0,.58);
- ceilingGlow.emissive=new THREE.Color(0xd6f4c4);ceilingGlow.emissiveIntensity=1.25;
- box(45,4.66,-29,6.45,.055,.50,ceilingGlow);
+ ceilingGlow.emissive=new THREE.Color(0xd6f4c4);ceilingGlow.emissiveIntensity=1.8;
+ box(45,4.67,-30.05,6.45,.065,.22,ceilingGlow);
  // Triage counter and red first aid container on the right.
- box(56,1.04,-32.8,5.0,2.0,1.85,mat(0x4c4437));
+ box(56,1.04,-32.8,5.0,2.0,1.85,wornSurface(0x4c4437,193,2,1));
  box(56,2.09,-32.8,5.15,.13,2.02,mat(0x8a7960));
+ for(const x of [54.4,56,57.6]){
+  box(x,1.22,-31.86,1.42,1.42,.095,mat(0x4a5042));
+  box(x,1.78,-31.795,.67,.06,.035,medHandle);
+ }
  box(56.8,2.4,-32.9,.77,.49,.58,mat(0x932b2b));
  box(56.8,2.69,-32.6,.15,.31,.035,mat(0xe4dfcf));
  box(56.8,2.69,-32.6,.42,.095,.04,mat(0xe4dfcf));
+ box(56.8,2.69,-32.91,.32,.075,.11,trim);
  // Low-cost dropped rubble to break up the perfectly clean floor without blocking the mission corridor.
  const rubbleMat=mat(0x8d816a),paperMat=mat(0xaaa48d);
  instanced(24,rubbleMat,i=>({x:32+(i*17%26),y:.123,z:-36+(i*11%21),w:.11+(i%4)*.065,h:.048,d:.17+(i%3)*.04,rot:i*.61}));
@@ -394,8 +427,8 @@ function makeWorld(){
  const wardFixture=matUnique(0xc5d6ca);
  wardFixture.emissive.setHex(0x9ac1c1);wardFixture.emissiveIntensity=.7;
  for(const x of [38,48])for(const z of [-34,-27])box(x,4.74,z,2.8,.13,.43,wardFixture);
- addLight(44,3.65,-25,0xc0e8eb,7.8,22);addLight(54,3.8,-32,0xa2c7db,3.6,15);
- const ward=label("WARD B   /   TRIAGE",10,1.1,"#37565d","#e1e6df",48);ward.position.set(46,2.7,-38.52);world.add(ward);
+ addLight(44,4.14,-29.5,0xe6f1d6,12,21);addLight(54,3.32,-33.5,0xb7d0d7,4.5,15);
+ const ward=label("WARD B / TRIAGE",4.6,.36,"#414238","#d5cdb5",50);ward.position.set(56,1.56,-31.78);world.add(ward);
  // Patrol car, street debris and reflective safety cones form a readable landmark.
  makeCar(17,2,0x343b40,true);addLight(17,5,4,0xf0bd78,5,18);lamp(23,-8,true);
  for(const [x,z] of [[13,-2],[21,5],[23,1]]){const cone=mesh(new THREE.ConeGeometry(.33,.87,7),mat(0xa8683d),x,.5,z);cone.castShadow=true;
@@ -474,17 +507,121 @@ const infectedFabric=Object.freeze({
  brute:wornSurface(0x5e524c,1403,1,1),
  spitter:wornSurface(0x62745b,1404,1,1)
 });
-function humanoid(kind="player"){
+function bodyProfile(rings,segments=12){
+ return new THREE.LatheGeometry(rings.map(([radius,y])=>new THREE.Vector2(radius,y)),segments);
+}
+const jacketShape=bodyProfile([[.85,0],[.96,.06],[.91,.29],[1,.61],[1.02,.81],[.76,.98],[.43,1.04]]);
+const sleeveShape=bodyProfile([[.72,0],[.89,.05],[.88,.26],[.95,.48],[1,.67],[.91,.8],[.55,.87]]);
+const trouserShape=bodyProfile([[.64,0],[.76,.08],[.81,.34],[.89,.55],[1,.72],[.97,.94],[.76,1]]);
+const neckShape=bodyProfile([[.98,0],[1,.13],[.8,.27]]);
+const survivorHairShape=new THREE.SphereGeometry(1,14,9,0,Math.PI*2,0,Math.PI*.58);
+const roundedGear=(()=>{
+ const shape=new THREE.Shape();
+ shape.moveTo(-.37,-.37);shape.lineTo(.37,-.37);shape.lineTo(.37,.37);shape.lineTo(-.37,.37);shape.closePath();
+ const geometry=new THREE.ExtrudeGeometry(shape,{depth:.74,bevelEnabled:true,bevelSize:.13,bevelThickness:.13,bevelSegments:2,steps:1,curveSegments:1});
+ geometry.translate(0,0,-.37);
+ return geometry;
+})();
+const survivorCloth=wornSurface(0x514137,926,1,1);
+const packCloth=wornSurface(0x37543e,932,1,1);
+const hairCloth=wornSurface(0x352720,329,1,1);
+const contactShadow=(()=>{
+ const canvas=document.createElement("canvas");canvas.width=canvas.height=64;
+ const context=canvas.getContext("2d");
+ const shade=context.createRadialGradient(32,32,5,32,32,30);
+ shade.addColorStop(0,"rgba(10,11,9,.65)");shade.addColorStop(.54,"rgba(10,11,9,.29)");shade.addColorStop(1,"rgba(10,11,9,0)");
+ context.fillStyle=shade;context.fillRect(0,0,64,64);
+ const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;
+ return new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1});
+})();
+const shadowPlane=new THREE.PlaneGeometry(1,1);
+function attachContactShadow(group,x=0,z=0,y=.085,width=1.43,depth=1.06){
+ const shadow=mesh(shadowPlane,contactShadow,x,y,z,group);
+ shadow.scale.set(width,depth,1);
+ shadow.rotation.x=-Math.PI/2;shadow.receiveShadow=false;
+ return shadow;
+}
+const civilianOutfits={
+ mara:{top:mat(0x836955),pants:mat(0x343d41),skin:mat(0xa17558)},
+ vale:{top:mat(0xc9cec6),pants:mat(0xaeb5ac),skin:mat(0xb08b6e)},
+ guard:{top:mat(0x536c76),pants:mat(0x314852),skin:mat(0xa07f63)}
+};
+function createSurvivor(kind){
+ const outfit=civilianOutfits[kind];
+ const top=outfit?.top??plaidMat,pants=outfit?.pants??survivorCloth;
  const group=new THREE.Group();
- const zombie=["walker","runner","brute","spitter"].includes(kind);
- const skin=zombie?infectedSkin:mat(kind==="mara"?0xc39e80:0xb8a18b);
- const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xd5d6ce):kind==="guard"?mat(0x607981):kind==="runner"?infectedFabric.runner:kind==="brute"?infectedFabric.brute:kind==="spitter"?infectedFabric.spitter:infectedFabric.walker;
- const pants=mat(zombie?0x48473f:kind==="vale"?0xa9aaa0:kind==="player"?0x554539:kind==="guard"?0x2f5265:0x39444a);
- const torso=mesh(jacketTorsoGeometry,zombie?fabric.clone():fabric,0,1.61,0,group);torso.castShadow=true;
+ const torso=new THREE.Group();torso.position.y=1.13;group.add(torso);
+ const head=new THREE.Group();head.position.set(0,1.26,-.015);torso.add(head);
+ const skin=outfit?.skin??mat(0xaa8065),boot=mat(kind==="vale"?0x77786c:0x392d20),sole=mat(0x242321),edge=mat(0x252d23),straps=mat(0x55624b),metal=mat(0x888374,.56,.5);
+ function shaped(geometry,material,parent,x,y,z,sx,sy,sz){
+  const part=mesh(geometry,material,x,y,z,parent);
+  part.scale.set(sx,sy,sz);part.castShadow=true;
+  return part;
+ }
+ shaped(jacketShape,top,torso,0,0,0,.45,1,.27);
+ shaped(neckShape,skin,torso,0,1.01,0,.135,1,.13);
+ shaped(unitSphere,skin,head,0,0,-.027,.227,.312,.235);
+ shaped(unitSphere,skin,head,0,-.13,-.07,.181,.17,.173);
+ shaped(survivorHairShape,hairCloth,head,0,.045,.012,.237,.324,.241).rotation.x=-.17;
+ shaped(unitSphere,hairCloth,head,0,-.09,.178,.151,.075,.064);
+ shaped(unitSphere,skin,head,0,-.02,-.247,.054,.078,.055);
+ for(const side of [-1,1]){
+  shaped(unitSphere,skin,head,.221*side,-.04,.005,.038,.076,.046);
+  box(.091*side,.037,-.238,.067,.024,.025,mat(0x392d27),false,head);
+ }
+ shaped(roundedGear,pants,group,0,1.13,.009,.66,.28,.42);
+ const limbs=[];
+ for(const side of [-1,1]){
+  const arm=new THREE.Group();arm.position.set(side*.437,.83,0);torso.add(arm);
+  shaped(sleeveShape,top,arm,side*.067,-.77,0,.149,1,.142).rotation.z=side*.10;
+  shaped(unitSphere,skin,arm,side*.09,-.849,-.016,.071,.127,.063);
+  shaped(unitSphere,skin,arm,side*.042,-.82,-.055,.035,.069,.046);
+  limbs.push(arm);
+  const leg=new THREE.Group();leg.position.set(side*.185,1.12,.023);group.add(leg);
+  shaped(trouserShape,pants,leg,0,-.92,0,.185,1,.173);
+  shaped(roundedGear,boot,leg,0,-.939,-.079,.263,.252,.422);
+  box(0,-1.054,-.085,.27,.066,.436,sole,false,leg);
+  limbs.push(leg);
+ }
+ if(kind==="player"){
+  shaped(roundedGear,packCloth,torso,0,.52,.402,.665,.96,.425);
+  shaped(roundedGear,edge,torso,0,.489,.623,.533,.655,.082);
+  shaped(roundedGear,packCloth,torso,0,.423,.682,.482,.485,.095);
+  box(0,.684,.733,.39,.031,.025,straps,false,torso);
+  box(0,.925,.432,.218,.082,.098,edge,false,torso);
+  for(const side of [-1,1]){
+   const strap=box(side*.276,.473,-.252,.086,.824,.067,edge,false,torso);strap.rotation.z=side*.10;
+   shaped(roundedGear,packCloth,torso,side*.33,.426,.412,.13,.45,.30);
+   box(side*.219,.522,.722,.038,.554,.021,straps,false,torso);
+   box(side*.22,.685,.738,.067,.075,.024,metal,false,torso);
+  }
+ }else if(kind==="vale"){
+  const piping=mat(0x799396),pocket=mat(0xb0b8b3);
+  box(0,.41,-.265,.038,.69,.033,pocket,false,torso);
+  box(.178,.66,-.255,.117,.146,.045,piping,false,torso);
+  box(.178,.70,-.279,.073,.027,.006,mat(0xc9c3a6),false,torso);
+ }else if(kind==="guard"){
+  shaped(roundedGear,mat(0x5f6555),head,0,.25,0,.48,.167,.47);
+  shaped(roundedGear,mat(0x50574a),head,0,.207,-.193,.455,.048,.253);
+  box(-.19,.67,-.26,.102,.114,.033,mat(0x92968b),false,torso);
+ }else{
+  box(0,.36,-.251,.55,.65,.055,mat(0x4b4137),false,torso);
+  box(.118,.27,-.286,.24,.21,.042,mat(0x554537),false,torso);
+ }
+ group.userData={limbs,head,torso};
+ return group;
+}
+function humanoid(kind){
+ if(kind==="player"||Object.hasOwn(civilianOutfits,kind))return createSurvivor(kind);
+ const group=new THREE.Group();
+ const skin=infectedSkin;
+ const fabric=infectedFabric[kind]??infectedFabric.walker;
+ const pants=mat(0x48473f);
+ const torso=mesh(jacketTorsoGeometry,fabric.clone(),0,1.61,0,group);torso.castShadow=true;
  box(0,1.11,0,.72,.18,.43,pants,false,group);
  const head=sphere(0,2.42,-.01,.33,skin,group);head.scale.set(.27,.363,.277);
  box(0,2.36,-.286,.071,.13,.11,skin,false,group);
- const hair=sphere(0,2.70,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.27,.12,.245);
+ const hair=sphere(0,2.70,.0,.32,mat(0x42483e),group);hair.scale.set(.27,.12,.245);
  for(let side of [-1,1]){sphere(side*.13,2.46,-.29,.036,mat(0x1d2220),group);}
  const limbs=[];
  for(let s of [-1,1]){
@@ -495,41 +632,6 @@ function humanoid(kind="player"){
   const thigh=mesh(trouserGeometry,pants,0,-.40,0,leg);thigh.castShadow=true;
   box(0,-.89,-.10,.37,.20,.55,dark,false,leg);limbs.push(leg);
  }
- if(kind==="player"){
-  const olive=mat(0x334b36),edging=mat(0x1c2921),webbing=mat(0x647454),worn=mat(0x392b29),hardware=mat(0xa5a58a,.42,.6);
-  // Structured green field backpack with folded flap, straps and deep side pockets.
-  box(0,1.57,.43,.72,1.06,.40,olive,false,group);
-  box(0,1.99,.67,.68,.22,.08,mat(0x405940),false,group);
-  box(0,1.82,.679,.55,.055,.06,webbing,false,group);
-  box(0,1.20,.65,.48,.32,.13,olive,false,group);
-  box(0,1.36,.728,.49,.065,.06,edging,false,group);
-  for(const side of [-1,1]){
-   const strap=box(side*.31,1.65,-.33,.11,.91,.10,edging,false,group);strap.rotation.z=side*.12;
-   box(side*.34,1.75,-.39,.10,.22,.055,webbing,false,group);
-   box(side*.38,1.42,.41,.16,.60,.30,olive,false,group);
-   box(side*.40,1.27,.60,.13,.08,.06,webbing,false,group);
-   box(side*.26,1.82,.71,.07,.16,.065,hardware,false,group);
-   box(side*.30,1.49,.648,.033,.64,.047,webbing,false,group);
-  }
-  // Weathered elbows and knees attached to the existing animation pivots.
-  for(const idx of [0,2])box(0,-.53,-.17,.28,.19,.07,worn,false,limbs[idx]);
-  for(const idx of [1,3])box(0,-.56,-.19,.30,.19,.065,worn,false,limbs[idx]);
-  box(0,1.08,-.34,.38,.11,.10,mat(0x2b2421),false,group);
-  box(.46,1.05,-.08,.11,.48,.12,hardware,false,group);
- }
- if(kind==="vale"){
-  box(0,1.36,-.29,.52,.65,.06,mat(0xe0e2da),false,group);
-  box(.27,1.61,-.35,.12,.16,.055,mat(0x4c7e80),false,group);
-  box(0,1.49,-.35,.08,.32,.055,mat(0x819d9c),false,group);
-  for(const side of [-1,1])box(side*.16,1.69,-.34,.035,.15,.06,mat(0xbac4c0),false,group);
- }
- if(kind==="guard"){
-  box(0,2.70,0,.66,.22,.60,mat(0x59665b),false,group);
-  box(0,2.60,-.27,.65,.06,.45,mat(0x464e46),false,group);
-  box(-.27,1.70,-.31,.14,.21,.05,mat(0x9ca395),false,group);
-  box(0,1.21,-.30,.48,.15,.06,mat(0x3d4c4d),false,group);
- }
- if(kind==="mara"){box(0,1.65,-.29,.60,.74,.12,mat(0x473f37),false,group);}
  if(kind==="brute"){
   group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x*=1.12;
   const bulk=mat(0x655e54);
@@ -546,11 +648,20 @@ function humanoid(kind="player"){
   for(const side of [-1,1]){sphere(side*.42,1.35,-.28,.21,glow,group);}
   sphere(0,2.02,-.29,.18,glow,group);
  }
- if(zombie){box(0,1.57,-.29,.45,.22,.03,mat(0x482c2a),false,group);}
+ box(0,1.57,-.29,.45,.22,.03,mat(0x482c2a),false,group);
  group.userData={limbs,head,torso};
  return group;
 }
-function createNPC(kind,x,z,angle){const c=humanoid(kind);c.position.set(x,0,z);c.rotation.y=angle;world.add(c);return c;}
+function createNPC(kind,x,z,angle){
+ const character=humanoid(kind);
+ character.position.set(x,0,z);character.rotation.y=angle;
+ const {limbs,head,torso}=character.userData;
+ torso.rotation.z=kind==="guard"?-.046:.034;
+ head.rotation.y=kind==="guard"?.16:-.12;
+ limbs[0].rotation.x=-.10;limbs[2].rotation.x=.07;
+ world.add(character);attachContactShadow(world,x,z);
+ return character;
+}
 function spawnEnemy(type,x,z,ambush=false){
  const c=humanoid(type);c.position.set(x,0,z);world.add(c);
  const spec=INFECTED[type]||INFECTED.walker;
@@ -561,11 +672,9 @@ function spawnEnemy(type,x,z,ambush=false){
 function spawnAmbient(){spawnEnemy("walker",-27,3);spawnEnemy("runner",5,13);spawnEnemy("spitter",32,11);}
 function makeMarker(){
  marker=new THREE.Group();scene.add(marker);
- const beamMat=new THREE.MeshBasicMaterial({color:0xd4b879,transparent:true,opacity:.035,depthWrite:false});
- const beam=mesh(new THREE.CylinderGeometry(.38,.10,6.5,14,1,true),beamMat,0,3.6,0,marker);
- beam.material.side=THREE.DoubleSide;
- markerRing=mesh(new THREE.TorusGeometry(.62,.043,6,36),goldMat,0,.15,0,marker);markerRing.rotation.x=Math.PI/2;
- mesh(new THREE.OctahedronGeometry(.33,0),goldMat,0,5.4,0,marker);
+ markerRing=mesh(new THREE.TorusGeometry(.53,.033,5,32),goldMat,0,.146,0,marker);
+ markerRing.rotation.x=Math.PI/2;
+ markerDiamond=mesh(new THREE.OctahedronGeometry(.15),goldMat,0,2.65,0,marker);
 }
 function setMarker(){const obj=stages[state.stage];if(!obj){marker.visible=false;return;}marker.visible=true;marker.position.set(obj.point.x,0,obj.point.z);refreshObjective();}
 function refreshObjective(){
@@ -794,6 +903,7 @@ function updatePlayer(dt){
  if(stepping)gaitPhase=(gaitPhase+travel*1.86)%(2*Math.PI);
  gaitBlend+=((stepping?1:0)-gaitBlend)*(1-Math.exp(-dt*13));
  playerVisual.position.set(state.x,(1-Math.cos(gaitPhase*2))*gaitBlend*.027,state.z);
+ playerShadow.position.set(state.x,.085,state.z);
  playerVisual.rotation.y=state.angle;
  animateLimbs(playerVisual,Math.sin(gaitPhase)*gaitBlend*(sprint?1.1:.72));
  poseSurvivor(stepping,stepping&&sprint);
@@ -857,13 +967,21 @@ function constrainCamera(position){
  if(cameraHits.length)position.copy(cameraPivot).addScaledVector(cameraDirection,Math.max(0,cameraHits[0].distance-.22));
 }
 function updateCamera(dt){
- const horizontal=Math.cos(cameraPitch)*7.5,vertical=Math.sin(cameraPitch)*7.5+state.cameraKick*.85;
- cameraPivot.set(state.x,2.2,state.z);
- cameraDesired.set(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.65,state.z+Math.cos(cameraYaw)*horizontal);
+ const yawX=Math.sin(cameraYaw),yawZ=Math.cos(cameraYaw);
+ const wideFrame=clamp((camera.aspect-.65)/.55,0,1);
+ const shoulder=.30+.60*wideFrame;
+ const reach=5.0;
+ const horizontal=Math.cos(cameraPitch)*reach;
+ const vertical=Math.sin(cameraPitch)*reach+state.cameraKick*.85;
+ cameraPivot.set(state.x,1.82,state.z);
+ cameraDesired.set(state.x+yawX*horizontal+yawZ*shoulder,vertical+1.54,state.z+yawZ*horizontal-yawX*shoulder);
  camera.position.lerp(cameraDesired,1-Math.exp(-dt*8));
  // Constrain the smoothed position so the camera cannot linger across a wall.
  constrainCamera(camera.position);
- camera.lookAt(cameraPivot);
+ const visibleOffset=clamp((camera.position.x-state.x)*yawZ-(camera.position.z-state.z)*yawX,-shoulder,shoulder)*.84;
+ cameraLook.set(state.x+yawZ*visibleOffset,1.87,state.z-yawX*visibleOffset);
+ camera.lookAt(cameraLook);
+ playerVisual.visible=camera.position.distanceToSquared(cameraPivot)>1.15**2;
  fieldFlashlight.position.set(state.x,2.22,state.z);
  fieldFlashlightTarget.position.set(state.x-Math.sin(cameraYaw)*12,1.55,state.z-Math.cos(cameraYaw)*12);
  fieldFlashlightTarget.updateMatrixWorld();
@@ -878,7 +996,7 @@ function currentMetrics(){
  geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
  pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,
  pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
- quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.9"};
+ quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.10"};
 }
 function updatePerfReadout(){
  if($("perf-panel").hidden)return;
@@ -893,7 +1011,7 @@ function exportPerformanceReport(){
   metrics:currentMetrics(),framesMs:[...qaFrameMs]};
  const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob);
- const link=document.createElement("a");link.href=url;link.download="ashford-v09-performance.json";
+ const link=document.createElement("a");link.href=url;link.download="ashford-v010-performance.json";
  document.body.appendChild(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1500);
  toast("LOCAL PERFORMANCE REPORT SAVED");
@@ -953,7 +1071,7 @@ function hardReset(){localStorage.removeItem("ashfordRebirthV01");location.reloa
 function start(){state.started=true;state.paused=false;$("intro").classList.remove("visible");$("hud").hidden=false;
  $("mobile-controls").hidden=!touchLayout.matches;
  loadGame();setMarker();try{tone(480,.15);}catch(e){}}
-const touchLayout=matchMedia("(pointer: coarse), (max-width: 750px)");
+const touchLayout=matchMedia("(any-pointer: coarse)");
 function controls(){
  $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;$("light-button").onclick=toggleFlashlight;
  $("export-perf").onclick=exportPerformanceReport;
@@ -1077,14 +1195,14 @@ function animate(){
   mapElapsed+=frameDt;
   if(mapElapsed>=.1){drawMap();mapElapsed=0;}
  }
- if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.4+Math.sin(performance.now()*.002)*.18;}
+ if(marker){markerRing.rotation.z+=frameDt*.8;markerDiamond.rotation.y+=frameDt*.75;markerDiamond.position.y=2.65+Math.sin(performance.now()*.002)*.11;}
  updateCamera(frameDt);lightBudgetElapsed+=frameDt;if(lightBudgetElapsed>=.38){updateLightBudget();lightBudgetElapsed=0;}renderer.render(scene,camera);
  perfPanelElapsed+=elapsed;if(perfPanelElapsed>.9){updatePerfReadout();perfPanelElapsed=0;}
  sampleGraphics(elapsed);
 }
 try{
- makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);
- createNPC("mara",-14,-27,Math.PI);createNPC("vale",51,-29,Math.PI);createNPC("guard",35,-28,Math.PI);
+ makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);playerShadow=attachContactShadow(world,state.x,state.z);
+ createNPC("mara",-14,-27,Math.PI);createNPC("vale",50.2,-30.75,Math.PI);createNPC("guard",38.7,-31.1,Math.PI*.85);
  updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();world.updateMatrixWorld(true);updateCamera(1);animate();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}

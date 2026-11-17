@@ -4,6 +4,20 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.10 — Screenshot-led visual overhaul
+
+The closer shoulder camera keeps the field kit in frame while leaving a view down
+the center of the route. The survivor, Mara, Dr. Vale and the clinic guard reuse
+shaped geometry for their faces, clothes and boots. The survivor retains the red
+plaid jacket and green pack. A small floor contact shadow grounds the figures
+even when hardware shadows are off.
+
+Ashford Clinic adds a suspended ceiling, fluorescent light spill, weathered
+checker tiles, deep teal wall bands and a rebuilt triage counter. Room collision,
+quest triggers and the opening checkpoint format retain their V0.9 behavior.
+The added art is procedural. Run `npm run test:reference` to capture clinic and
+market views, including a narrow desktop clinic frame at 602×560.
+
 ## V0.9 — Opening-route production pass
 
 Market storefront and register lighting, clinic side-ward curtains and fluorescent

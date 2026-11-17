@@ -96,3 +96,13 @@
  .weapon-card{bottom:165px}
  .panel-modal,.dialogue-box{max-height:calc(100dvh - 24px);overflow-y:auto}
 }
+
+@media(any-pointer:coarse){
+ #mobile-controls:not([hidden]){display:block}
+}
+
+@media(pointer:fine) and (max-width:750px){
+ .weapon-card{bottom:16px}
+ .context{bottom:55px}
+ .missionpanel{top:62px}
+}
