@@ -801,7 +801,7 @@ function exportPerformanceReport(){
 function applyQuality(mode,notify=false){
  qualityMode=mode==="performance"?"performance":"auto";
  const low=qualityMode==="performance";
- renderer.setPixelRatio(low?1:Math.min(devicePixelRatio,1.6));
+ renderer.setPixelRatio(low?Math.min(devicePixelRatio,.85):Math.min(devicePixelRatio,1.6));
  renderer.shadowMap.enabled=!low;
  $("quality-button").textContent=low?"GRAPHICS: PERFORMANCE":"GRAPHICS: AUTO";
  try{localStorage.setItem("ashfordGraphicsV02",qualityMode);}catch(e){}
@@ -942,7 +942,7 @@ function animate(){
  fpsFrames++;fpsLast+=elapsed;
  if(fpsLast>=5){
   const fps=fpsFrames/fpsLast;
-  if(fps<27&&renderer.getPixelRatio()>1){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}
+  if(fps<27&&qualityMode!=="performance"){applyQuality("performance");if(state.started)toast("FPS LOW — PERFORMANCE GRAPHICS ENABLED");}
   fpsLast=0;fpsFrames=0;
  }
 }
