@@ -16,8 +16,9 @@
 <div class="hud" id="hud" hidden>
  <header class="topbar">
   <div class="brand"><small>ASHFORD COUNTY / OUTBREAK +07</small><strong>DEAD ZONE <b>:</b> AFTERMATH</strong></div>
-  <div class="topbuttons"><span class="build">RECONSTRUCTION · v0.3</span><button id="inventory-button" title="Inventory (I)">PACK <kbd>I</kbd></button><button id="pause-button" title="Pause (Esc)">Ⅱ</button></div>
+  <div class="topbuttons"><span class="build">RECONSTRUCTION · v0.4</span><button id="perf-button" title="Performance metrics (P)">FPS <kbd>P</kbd></button><button id="inventory-button" title="Inventory (I)">PACK <kbd>I</kbd></button><button id="pause-button" title="Pause (Esc)">Ⅱ</button></div>
  </header>
+ <section id="perf-panel" class="perf-panel" hidden aria-live="off"><div class="eyebrow">RENDER DIAGNOSTICS</div><div id="perf-numbers">Collecting frames…</div><small>Local device estimates · not GPU profiler</small></section>
  <section class="leftpanel">
   <div class="stat"><div class="stat-title"><span>HEALTH</span><span id="hp-num">100 / 100</span></div><div class="track"><div id="hp-bar" class="fill health"></div></div></div>
   <div class="stat"><div class="stat-title"><span>STAMINA</span><span id="st-num">100 / 100</span></div><div class="track"><div id="st-bar" class="fill stamina"></div></div></div>
