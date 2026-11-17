@@ -53,9 +53,10 @@ const cameraRay=new THREE.Raycaster();
 
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
-function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(new THREE.BoxGeometry(w,h,d),material,x,y,z,group);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
+const unitCube=new THREE.BoxGeometry(1,1,1);
+function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function instanced(count,material,transform){
- const group=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),material,count);
+ const group=new THREE.InstancedMesh(unitCube,material,count);
  const dummy=new THREE.Object3D();
  for(let i=0;i<count;i++){
   const data=transform(i);
@@ -274,7 +275,7 @@ function humanoid(kind="player"){
  if(kind==="vale"){box(0,1.36,-.28,.52,.75,.07,mat(0xe1e4da),false,group);box(0,1.49,-.35,.09,.3,.07,mat(0x35727b),false,group);}
  if(kind==="mara"){box(0,1.65,-.29,.60,.74,.12,mat(0x473f37),false,group);}
  if(kind==="brute"){
-  group.scale.set(1.32,1.27,1.24);torso.scale.x=1.35;head.scale.x=1.12;
+  group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x=1.12;
   const bulk=mat(0x655e54);
   for(const side of [-1,1]){sphere(side*.62,2.02,.02,.38,bulk,group);box(side*.60,1.63,.20,.20,.48,.20,bulk,false,group);}
  }
