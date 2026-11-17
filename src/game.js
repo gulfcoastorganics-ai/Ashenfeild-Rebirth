@@ -336,7 +336,8 @@ function dressStreet(){
 function makeWorld(){
  // Single reusable 256px procedural roadway texture; detail without external assets.
  asphalt.map=gritTexture();asphalt.color.set(0xffffff);asphalt.needsUpdate=true;
- floor(0,0,160,140,mat(0x343d36));
+ // Terrain sits below the road and sidewalk to keep their textures stable.
+ box(0,-.039,0,160,.076,140,mat(0x343d36));
  // Asphalt, sidewalk, gutters, and lane paint
  const sidewalk=new THREE.MeshStandardMaterial({map:sidewalkTexture(),roughness:.96});
  floor(0,0,145,16,asphalt);floor(0,-10,145,4,sidewalk);floor(0,10,145,4,sidewalk);
@@ -408,7 +409,8 @@ function makeWorld(){
  for(let z of [-27,-34]){const fixture=box(-11,4.70,z,2.35,.14,.31,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
  house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:masonry("#747973",331,5,2),theme:"clinic"});
- const clinicSign=label("ASHFORD CLINIC",20,2.15,"#253b43","#b8dce0",75);clinicSign.position.set(45,4.4,-12.65);world.add(clinicSign);
+ box(44,4.31,-12.61,13.6,1.17,.22,mat(0x343d3e));
+ const clinicSign=label("ASHFORD CLINIC",13.4,1.07,"#253b43","#b8dce0",94);clinicSign.position.set(44,4.31,-12.48);world.add(clinicSign);
  windowPanel(34,2.3,-12.65,4,2.5);windowPanel(56,2.3,-12.65,4,2.5);
  for(let x of [34,55])box(x,3.66,-12.54,5.5,.20,.09,mat(0x4b6d71));
  box(44,.12,-12.3,8,.03,.65,mat(0xc1bb9f));
