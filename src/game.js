@@ -152,7 +152,8 @@ function wornSurface(base,seed=1,x=2,y=1){return new THREE.MeshStandardMaterial(
 function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safehouse"}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
  const tile=matUnique(0xffffff);tile.map=interiorFloorTexture(w,d,theme);tile.needsUpdate=true;
- floor(cx,cz,w,d,tile);
+ // Lift interior finish above the base world ground to eliminate coplanar depth fighting.
+ box(cx,.057,cz,w,.028,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
  wall(left,cz,.7,d,4.9,color);wall(right,cz,.7,d,4.9,color);
  if(doorX-frontGap/2>left)wall((left+doorX-frontGap/2)/2,frontZ,doorX-frontGap/2-left,.7,4.9,color);
@@ -231,7 +232,7 @@ function makeWorld(){
  box(44,.12,-12.3,8,.03,.65,mat(0xc1bb9f));
  const redCross=label("+",2.6,2.3,"#e7ded5","#ab3732",140);redCross.position.set(45,6.45,-12.8);world.add(redCross);
  // Clinic wayfinding
- for(let z of [-30,-22]){const strip=box(43,.055,z,15,.014,.15,mat(0x9bafad));}
+ for(let z of [-30,-22]){const strip=box(43,.089,z,15,.014,.15,mat(0x9bafad));}
  for(let x of [34,53]){for(let z of [-33,-24]){box(x,.42,z,3,.8,1,mat(0x697b79),true);
  box(x,1.04,z,3,.09,1,mat(0x909f9b));
  for(let j=-1;j<=1;j++)cyl(x+j*.65,1.35,z,.14,.5,mat(0x8a9998));
