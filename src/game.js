@@ -111,19 +111,38 @@ function gritTexture(){
 }
 function wall(x,z,w,d,h,material=brick){return box(x,h/2,z,w,h,d,material,true)}
 function floor(x,z,w,d,material){return box(x,.025,z,w,.05,d,material)}
-function interiorFloorTexture(w,d){
+function interiorFloorTexture(w,d,theme="safehouse"){
  const c=document.createElement("canvas");c.width=c.height=128;
- const ctx=c.getContext("2d");ctx.fillStyle="#55534b";ctx.fillRect(0,0,128,128);
- for(let i=0;i<13;i++){const v=i*10;ctx.strokeStyle="rgba(20,24,23,.24)";
+ const ctx=c.getContext("2d");ctx.fillStyle=theme==="clinic"?"#7b8581":theme==="market"?"#675b49":"#55534b";ctx.fillRect(0,0,128,128);
+ for(let i=0;i<13;i++){const v=i*(theme==="clinic"?10:theme==="market"?16:10);ctx.strokeStyle="rgba(20,24,23,.24)";
   ctx.beginPath();ctx.moveTo(v,0);ctx.lineTo(v,128);ctx.moveTo(0,v);ctx.lineTo(128,v);ctx.stroke();}
  for(let i=0;i<350;i++){ctx.fillStyle=i%3===0?"rgba(179,167,142,.17)":"rgba(19,27,27,.18)";
   ctx.fillRect(rand(0,128),rand(0,128),rand(.3,2.8),rand(.3,1.5));}
  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(w/8,d/8);return t;
 }
-function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true}){
+function proceduralSurface(base,seed=1,repeatX=2,repeatY=1){
+ const canvas=document.createElement("canvas");canvas.width=canvas.height=256;
+ const ctx=canvas.getContext("2d");ctx.fillStyle="#"+base.toString(16).padStart(6,"0");ctx.fillRect(0,0,256,256);
+ let v=seed>>>0;const random=()=>{v=(Math.imul(1664525,v)+1013904223)>>>0;return v/4294967296;};
+ for(let i=0;i<950;i++){
+  const x=random()*256,y=random()*256;
+  ctx.fillStyle=i%3===0?"rgba(25,28,27,.17)":"rgba(213,203,183,.08)";
+  ctx.fillRect(x,y,.3+random()*4,.5+random()*13);
+ }
+ for(let i=0;i<35;i++){
+  const x=random()*256,y=random()*256;
+  ctx.strokeStyle="rgba(19,28,29,.25)";ctx.lineWidth=.4+random();
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+(random()-.5)*16,y+(random()-.5)*34);ctx.stroke();
+ }
+ const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;
+ t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(repeatX,repeatY);t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+ return t;
+}
+function wornSurface(base,seed=1,x=2,y=1){return new THREE.MeshStandardMaterial({map:proceduralSurface(base,seed,x,y),roughness:.95});}
+function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safehouse"}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
- const tile=matUnique(0xffffff);tile.map=interiorFloorTexture(w,d);tile.needsUpdate=true;
+ const tile=matUnique(0xffffff);tile.map=interiorFloorTexture(w,d,theme);tile.needsUpdate=true;
  floor(cx,cz,w,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
  wall(left,cz,.7,d,4.9,color);wall(right,cz,.7,d,4.9,color);
@@ -150,7 +169,7 @@ function makeWorld(){
   w:rand(.25,1.5),h:rand(.18,.7),d:1,rx:-Math.PI/2
  }),new THREE.CircleGeometry(1,20));
  // Safehouse
- house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:mat(0x505452)});
+ house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:wornSurface(0x505452,121),theme:"safehouse"});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
  const safeLamp=box(-48,4.42,-25,2.5,.17,.52,matUnique(0xf3d7a3));
  safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
@@ -160,7 +179,7 @@ function makeWorld(){
  for(let i=0;i<3;i++)box(-56+i*.8,2.5,-14.1,.1,2.4,.12,mat(0x6a5842));
  box(-47,2.3,-13.65,5.8,3.9,.12,mat(0x343c39,.95),false).visible=false;
  // market
- house({cx:-11,cz:-26,w:26,d:24,frontGap:9,doorX:-11,color:mat(0x60594d)});
+ house({cx:-11,cz:-26,w:26,d:24,frontGap:9,doorX:-11,color:wornSurface(0x60594d,229),theme:"market"});
  const marketSign=label("LAST STOP MARKET",19,2.2,"#2d3534","#dfaa6d",78);marketSign.position.set(-11,4.35,-13.56);world.add(marketSign);
  windowPanel(-20,2.25,-13.55,4,2.4);windowPanel(-2,2.25,-13.55,4,2.4);
  // Hand-height scuffs and grime at the storefront, intentionally low-cost decals.
@@ -196,7 +215,7 @@ function makeWorld(){
  addLight(-5,4,-21,0xb77d44,4,15);
  for(let z of [-20,-33]){const fixture=box(-11,4.45,z,3,.18,.4,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
- house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:mat(0x768080)});
+ house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:wornSurface(0x768080,331),theme:"clinic"});
  const clinicSign=label("ASHFORD CLINIC",20,2.15,"#253b43","#b8dce0",75);clinicSign.position.set(45,4.4,-12.65);world.add(clinicSign);
  windowPanel(34,2.3,-12.65,4,2.5);windowPanel(56,2.3,-12.65,4,2.5);
  for(let x of [34,55])box(x,3.66,-12.54,5.5,.20,.09,mat(0x4b6d71));
@@ -288,11 +307,18 @@ function plaidTexture(){
  return t;
 }
 const plaidMat=new THREE.MeshStandardMaterial({map:plaidTexture(),roughness:.98});
+const infectedSkin=wornSurface(0x8c9783,923,1,1);
+const infectedFabric=Object.freeze({
+ walker:wornSurface(0x60635e,1401,1,1),
+ runner:wornSurface(0x4e6665,1402,1,1),
+ brute:wornSurface(0x5e524c,1403,1,1),
+ spitter:wornSurface(0x62745b,1404,1,1)
+});
 function humanoid(kind="player"){
  const group=new THREE.Group();
  const zombie=["walker","runner","brute","spitter"].includes(kind);
- const skin=mat(zombie?0x8c9783:kind==="mara"?0xc39e80:0xb8a18b);
- const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xc5d1c9):kind==="runner"?mat(0x4e6665):kind==="brute"?mat(0x5e524c):kind==="spitter"?mat(0x62745b):mat(0x60635e);
+ const skin=zombie?infectedSkin:mat(kind==="mara"?0xc39e80:0xb8a18b);
+ const fabric=kind==="player"?plaidMat:kind==="mara"?mat(0x84604c):kind==="vale"?mat(0xc5d1c9):kind==="runner"?infectedFabric.runner:kind==="brute"?infectedFabric.brute:kind==="spitter"?infectedFabric.spitter:infectedFabric.walker;
  const pants=mat(zombie?0x48473f:kind==="vale"?0x4d616c:0x39444a);
  const torso=box(0,1.61,0,.85,1.0,.48,zombie?fabric.clone():fabric,false,group);
  box(0,1.11,0,.72,.18,.43,pants,false,group);
