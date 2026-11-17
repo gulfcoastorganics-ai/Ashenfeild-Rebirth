@@ -89,9 +89,10 @@ try{
 
  // Scripted, browser-rendered mission transitions. Teleports are available ONLY on 127.0.0.1/?__qa=1.
  // This verifies all route objectives and interactions, not physical traversal or combat balancing.
+ await page.close(); // Stop the first WebGL scene before starting a second software-rendered scene.
  const route=await browser.newPage({viewport:{width:1024,height:640},deviceScaleFactor:1});
  route.on("pageerror",err=>consoleErrors.push("ROUTE PAGE: "+err.message));
- await route.goto("http://127.0.0.1:"+port+"/?__qa=1",{waitUntil:"domcontentloaded"});
+ await route.goto("http://127.0.0.1:"+port+"/?__qa=1",{waitUntil:"domcontentloaded",timeout:90000});
  await route.waitForFunction(()=>Boolean(window.__ashfordQA),null,{timeout:45000});
  await route.locator("#start-button").click();
  const snapshot=()=>route.evaluate(()=>window.__ashfordQA.snapshot());
