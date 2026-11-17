@@ -461,6 +461,23 @@ function updateEnemies(dt){
  }
 }
 function animateLimbs(char,amount){const limbs=char.userData.limbs;if(!limbs)return;limbs[0].rotation.x=amount*.48;limbs[1].rotation.x=-amount*.65;limbs[2].rotation.x=-amount*.48;limbs[3].rotation.x=amount*.65;}
+
+function poseSurvivor(moving,sprinting){
+ const {limbs,head,torso}=playerVisual.userData;
+ if(!limbs)return;
+ // Additive animation over original four pivot groups: no replacement skeleton.
+ torso.rotation.x=sprinting?-.13:moving?-.035:Math.sin(state.time*1.7)*.012;
+ torso.rotation.z=moving?Math.sin(state.time*7)*.015:Math.sin(state.time*1.15)*.008;
+ head.rotation.x=sprinting?.08:0;
+ const swing=state.meleeAnim>0?Math.sin(Math.PI*(1-state.meleeAnim/WEAPONS.crowbar.cooldown)):0;
+ const recoil=state.pistolAnim>0?Math.sin(Math.PI*(1-state.pistolAnim/.28)):0;
+ limbs[2].rotation.x-=swing*1.85+recoil*.80;
+ limbs[2].rotation.z=-swing*.32;
+ if(state.hasGun&&!swing){limbs[2].rotation.x-=.24;limbs[0].rotation.x-=.12;}
+ // Differentiate sprint, sidestep and idle without expensive animation mixers.
+ if(sprinting){limbs[0].rotation.x*=1.35;limbs[1].rotation.x*=1.30;limbs[3].rotation.x*=1.30;}
+}
+
 function blocked(x,z,r=.3){return isBlocked2D(x,z,r,obstacles);}
 
 function lineBlocked(x1,z1,x2,z2,r=.1){return hasCover(x1,z1,x2,z2,r,obstacles);}
@@ -489,7 +506,11 @@ function updatePlayer(dt){
  if(state.thirst<3||state.hunger<3)state.health=clamp(state.health-dt*.8,0,100);
  playerVisual.position.set(state.x,Math.sin(state.time*(sprint?13:8))*(moving?.065:.016),state.z);
  playerVisual.rotation.y=state.angle;animateLimbs(playerVisual,moving?Math.sin(state.time*(sprint?13:8))*(sprint?1.1:.72):.02);
+ poseSurvivor(moving,sprint);
  state.attackTime=Math.max(0,state.attackTime-dt);state.shootTime=Math.max(0,state.shootTime-dt);state.hitTime=Math.max(0,state.hitTime-dt);
+ state.meleeAnim=Math.max(0,state.meleeAnim-dt);state.pistolAnim=Math.max(0,state.pistolAnim-dt);
+ state.cameraKick=Math.max(0,state.cameraKick-dt*.85);state.hitConfirm=Math.max(0,state.hitConfirm-dt);
+ if(state.hitConfirm===0)$("crosshair").classList.remove("hit","kill");
  const q=stages[state.stage];if(q.kind==="arrive"&&dist(pos(),q.point)<q.radius){if(state.stage===8)victory();else advance();}
  if(state.stage===7){state.waveTimer+=dt;if(state.waveTimer>6&&state.waveKills<4&&enemies.filter(e=>!e.dead&&e.ambush).length<3){spawnEnemy("walker",rand(22,58),rand(6,18),true);state.waveTimer=0;}}
 }
@@ -526,7 +547,7 @@ function drawMap(){
  ctx.strokeStyle="#778984";ctx.lineWidth=2;ctx.strokeRect(1,1,w-2,h-2);
 }
 function updateCamera(dt){
- const horizontal=Math.cos(cameraPitch)*12.5,vertical=Math.sin(cameraPitch)*12.5;
+ const horizontal=Math.cos(cameraPitch)*12.5,vertical=Math.sin(cameraPitch)*12.5+state.cameraKick*.85;
  const pivot=V(state.x,1.65,state.z);
  const desired=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.65,state.z+Math.cos(cameraYaw)*horizontal);
  const delta=desired.clone().sub(pivot),maxDist=delta.length(),dir=delta.normalize();
