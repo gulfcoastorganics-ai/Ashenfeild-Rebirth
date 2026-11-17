@@ -59,3 +59,74 @@ export function restoreCheckpoint(saved,current){
  if(isBlocked(s.x,s.z,.35,[])) {s.x=current.x;s.z=current.z;}
  return s;
 }
+
+/** Clearance-aware bounded 8-direction A*. Smoothed world waypoints; [] if unreachable. */
+export function findPath(start,goal,obstacles=[],options={}){
+ const step=options.step??1.75,r=options.clearance??.45,limit=options.maxVisited??4500,b=options.bounds??WORLD_LIMITS;
+ if(![start.x,start.z,goal.x,goal.z,step].every(Number.isFinite)||step<=.4)return [];
+ if(!isBlocked(start.x,start.z,r,obstacles,b)&&!isBlocked(goal.x,goal.z,r,obstacles,b)&&!lineBlocked(start.x,start.z,goal.x,goal.z,r,obstacles,b))return [{x:goal.x,z:goal.z}];
+ const cols=Math.floor((b.maxX-b.minX)/step),rows=Math.floor((b.maxZ-b.minZ)/step),size=cols*rows;
+ if(size>20000||cols<2||rows<2)return [];
+ const index=(x,z)=>z*cols+x,point=i=>({x:b.minX+(i%cols+.5)*step,z:b.minZ+(Math.floor(i/cols)+.5)*step});
+ const blockedCache=new Uint8Array(size);
+ function open(x,z){
+   if(x<0||z<0||x>=cols||z>=rows)return false;
+   const id=index(x,z);
+   if(!blockedCache[id]){const p=point(id);blockedCache[id]=isBlocked(p.x,p.z,r,obstacles,b)?2:1;}
+   return blockedCache[id]===1;
+ }
+ function nearest(p){
+   const sx=Math.max(0,Math.min(cols-1,Math.floor((p.x-b.minX)/step)));
+   const sz=Math.max(0,Math.min(rows-1,Math.floor((p.z-b.minZ)/step)));
+   for(let k=0;k<=5;k++){
+     let best=-1,score=Infinity;
+     for(let z=sz-k;z<=sz+k;z++)for(let x=sx-k;x<=sx+k;x++){
+       if(Math.max(Math.abs(x-sx),Math.abs(z-sz))!==k||!open(x,z))continue;
+       const q=point(index(x,z)),d=(q.x-p.x)**2+(q.z-p.z)**2;
+       if(d<score){best=index(x,z);score=d;}
+     }
+     if(best>=0)return best;
+   }
+   return -1;
+ }
+ const src=nearest(start),dst=nearest(goal);if(src<0||dst<0)return [];
+ const g=new Float64Array(size);g.fill(Infinity);
+ const prev=new Int32Array(size);prev.fill(-1);const visited=new Uint8Array(size);
+ const heap=[],h=id=>Math.hypot(id%cols-dst%cols,Math.floor(id/cols)-Math.floor(dst/cols));
+ const push=(id,f)=>{
+   const obj={id,f};let i=heap.length;heap.push(obj);
+   while(i){const p=(i-1)>>1;if(heap[p].f<=f)break;heap[i]=heap[p];i=p;}heap[i]=obj;
+ };
+ const pop=()=>{
+   const result=heap[0],last=heap.pop();
+   if(heap.length){let i=0;while(true){let c=i*2+1;if(c>=heap.length)break;
+     if(c+1<heap.length&&heap[c+1].f<heap[c].f)c++;
+     if(last.f<=heap[c].f)break;heap[i]=heap[c];i=c;
+   }heap[i]=last;}return result;
+ };
+ const offsets=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,Math.SQRT2],[-1,1,Math.SQRT2],[1,-1,Math.SQRT2],[-1,-1,Math.SQRT2]];
+ g[src]=0;push(src,h(src));let count=0,found=false;
+ while(heap.length&&count++<limit){
+   const id=pop().id;if(visited[id])continue;visited[id]=1;if(id===dst){found=true;break;}
+   const x=id%cols,z=Math.floor(id/cols);
+   for(const [dx,dz,cost] of offsets){
+     const nx=x+dx,nz=z+dz;if(!open(nx,nz))continue;
+     if(dx&&dz&&(!open(x+dx,z)||!open(x,z+dz)))continue;
+     const nid=index(nx,nz),next=g[id]+cost;if(visited[nid]||next>=g[nid]-1e-6)continue;
+     g[nid]=next;prev[nid]=id;push(nid,next+h(nid));
+   }
+ }
+ if(!found)return [];
+ const raw=[];
+ for(let i=dst;i!==src;i=prev[i]){if(i<0||raw.length>size)return [];raw.push(point(i));}
+ raw.reverse();
+ const path=[{x:start.x,z:start.z},...raw],result=[];let i=0;
+ while(i<path.length-1){
+   let best=i+1;
+   for(let j=path.length-1;j>i+1;j--){if(!lineBlocked(path[i].x,path[i].z,path[j].x,path[j].z,r,obstacles,b)){best=j;break;}}
+   result.push(path[best]);i=best;
+ }
+ const tail=result.at(-1)??start;
+ if(!isBlocked(goal.x,goal.z,r,obstacles,b)&&!lineBlocked(tail.x,tail.z,goal.x,goal.z,r,obstacles,b))result.push({x:goal.x,z:goal.z});
+ return result;
+}
