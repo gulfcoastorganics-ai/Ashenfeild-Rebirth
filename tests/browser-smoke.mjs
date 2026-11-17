@@ -58,8 +58,14 @@ try{
  await page.keyboard.press("Escape");
  assert(await page.locator("#pause-modal").isVisible(),"Pause menu did not open");
  assert(await page.locator("#quality-button").isVisible(),"Graphics toggle missing");
+ const beforeQuality=(await page.locator("#quality-button").innerText()).trim();
  await page.locator("#quality-button").click();
- assert((await page.locator("#quality-button").innerText()).includes("PERFORMANCE"),"Performance preset did not switch");
+ const afterQuality=(await page.locator("#quality-button").innerText()).trim();
+ assert.notEqual(afterQuality,beforeQuality,"Graphics mode button failed to toggle from "+beforeQuality);
+ if(!afterQuality.includes("PERFORMANCE")){
+  await page.locator("#quality-button").click();
+  assert((await page.locator("#quality-button").innerText()).includes("PERFORMANCE"),"Manual Performance mode unavailable");
+ }
  await page.locator("#resume").click();
  report("Pause / resume and quality preset","PASS");
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem("ashfordRebirthV01")||"null"));
