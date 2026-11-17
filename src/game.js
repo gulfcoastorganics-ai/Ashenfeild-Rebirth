@@ -386,6 +386,7 @@ function hurtEnemy(e,damage,weapon="pistol"){
  if(e.dead||e.hp<=0)return;
  const hit=applyHit(e.hp,damage);e.hp=hit.health;
  e.hitFlash=.18;e.stagger=e.type==="brute"?.13:.22;
+ if(e.type!=="brute"&&e.attackIntent){e.attackIntent=null;e.cd=Math.max(e.cd,.35);}
  tone(330,.07,"square",.035);confirmHit(hit.killed);
  if(!hit.killed)return;
  e.dead=true;e.death=1.7;e.attackIntent=null;state.kills++;
@@ -394,38 +395,69 @@ function hurtEnemy(e,damage,weapon="pistol"){
  }
  if(state.stage===7&&state.waveKills>=4){state.waveStarted=false;advance();}
 }
+function launchSpit(e,p){
+ const d=Math.max(.01,dist(e,p));
+ const orb=sphere(e.x,1.65,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));
+ effects.push({mesh:orb,life:3,total:3,kind:"spit",
+  vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8,damage:INFECTED.spitter.rangedDamage});
+ tone(225,.16,"triangle",.035);
+}
 function updateEnemies(dt){
  const p=pos();
  for(let i=enemies.length-1;i>=0;i--){
- const e=enemies[i];if(e.dead){e.death-=dt;e.mesh.rotation.z=Math.min(1.4,e.mesh.rotation.z+dt*2.3);e.mesh.position.y=-Math.max(0,1.7-e.death)*.20;if(e.death<=0){world.remove(e.mesh);enemies.splice(i,1);}continue;}
- e.phase+=dt*(e.type==="runner"?9:5);e.cd-=dt;const d=dist(p,e);
- if(d<38&&d>1.2&&state.started&&!state.paused){
-  e.routeTimer-=dt;
-  // A* runs when the target moves meaningfully or on a spaced cooldown.
-  // Direct unobstructed pursuit remains cheap, while static walls use cached waypoints.
-  if(e.routeTimer<=0||dist(p,e.routeTarget)>3){
-   e.route=findRoute(e,p,obstacles,{step:1.75,clearance:.45,maxVisited:4400});
-   if(!e.route.length)e.route=findRoute(e,chaseGoal(e,p),obstacles,{step:1.75,clearance:.45,maxVisited:2200});
-   e.routeTimer=rand(.85,1.45);
-   e.routeTarget={x:p.x,z:p.z};
+  const e=enemies[i];
+  if(e.dead){
+   e.death-=dt;e.mesh.rotation.z=Math.min(1.4,e.mesh.rotation.z+dt*2.3);
+   e.mesh.position.y=-Math.max(0,1.7-e.death)*.20;
+   if(e.death<=0){world.remove(e.mesh);enemies.splice(i,1);}
+   continue;
   }
-  while(e.route.length>1&&dist(e,e.route[0])<.6)e.route.shift();
-  const goal=e.route[0]||chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
-  const dx=(goal.x-e.x)/gd,dz=(goal.z-e.z)/gd;
-  let nx=e.x+dx*speed,nz=e.z+dz*speed;
-  if(!blocked(nx,nz,.42)&&!lineBlocked(e.x,e.z,nx,nz,.42)){e.x=nx;e.z=nz;}
-  else if(!blocked(nx,e.z,.42)){e.x=nx;}
-  else if(!blocked(e.x,nz,.42)){e.z=nz;}
-  else {e.routeTimer=0;}
-  e.mesh.rotation.y=Math.atan2(-dx,-dz);
- }
- if(d<1.55&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
- if(e.type==="spitter"&&d<13&&d>2.4&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){const orb=sphere(e.x,1.5,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));effects.push({mesh:orb,life:3,total:3,kind:"spit",vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8});e.cd=3.4;}
- e.mesh.position.set(e.x,Math.sin(e.phase)*.025,e.z);
- animateLimbs(e.mesh,Math.sin(e.phase)*.56);
- // A visible half-second windup communicates the Spitter's ranged attack.
- if(e.type==="spitter")e.mesh.userData.torso.rotation.x=e.cd>.01&&e.cd<.68?-(.68-e.cd)*.75:0;
- if(e.type==="runner")e.mesh.userData.torso.rotation.x=-.30;
+  e.phase+=dt*(e.type==="runner"?9:5);
+  e.cd=Math.max(0,e.cd-dt);e.hitFlash=Math.max(0,e.hitFlash-dt);
+  e.stagger=Math.max(0,e.stagger-dt);
+  const d=dist(p,e),attacking=Boolean(e.attackIntent);
+  if(d<38&&d>1.2&&state.started&&!state.paused&&e.stagger<=0&&!attacking){
+   e.routeTimer-=dt;
+   if(e.routeTimer<=0||dist(p,e.routeTarget)>3){
+    e.route=findRoute(e,p,obstacles,{step:1.75,clearance:.45,maxVisited:4400});
+    if(!e.route.length)e.route=findRoute(e,chaseGoal(e,p),obstacles,{step:1.75,clearance:.45,maxVisited:2200});
+    e.routeTimer=rand(.85,1.45);e.routeTarget={x:p.x,z:p.z};
+   }
+   while(e.route.length>1&&dist(e,e.route[0])<.6)e.route.shift();
+   const goal=e.route[0]||chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
+   const dx=(goal.x-e.x)/gd,dz=(goal.z-e.z)/gd;
+   let nx=e.x+dx*speed,nz=e.z+dz*speed;
+   if(!blocked(nx,nz,.42)&&!lineBlocked(e.x,e.z,nx,nz,.42)){e.x=nx;e.z=nz;}
+   else if(!blocked(nx,e.z,.42)){e.x=nx;}
+   else if(!blocked(e.x,nz,.42)){e.z=nz;}
+   else e.routeTimer=0;
+   e.mesh.rotation.y=Math.atan2(-dx,-dz);
+  }
+  // All attacks now have a telegraphed anticipation phase and are
+  // validated against current distance / cover when the strike resolves.
+  const newDist=dist(e,p);
+  const clear=!lineBlocked(e.x,e.z,p.x,p.z,.1);
+  if(e.attackIntent){
+   e.windup-=dt;
+   if(e.windup<=0){
+    const intent=e.attackIntent;e.attackIntent=null;e.cd=intent.cooldown;
+    if(attackStillValid(intent,newDist,clear)){
+     if(intent.kind==="spit")launchSpit(e,p);
+     else takeDamage(intent.damage);
+    }
+   }
+  }else if(e.cd<=0&&e.stagger<=0&&state.started&&!state.paused){
+   const intent=chooseInfectedAction(e.type,newDist,clear);
+   if(intent){e.attackIntent=intent;e.windup=intent.windup;}
+  }
+  e.mesh.position.set(e.x,Math.sin(e.phase)*.025,e.z);
+  animateLimbs(e.mesh,Math.sin(e.phase)*(attacking?.16:.56));
+  const torso=e.mesh.userData.torso;
+  const windup=e.attackIntent?Math.sin(Math.PI*(1-e.windup/e.attackIntent.windup)):.0;
+  torso.rotation.x=(e.type==="runner"?-.30:0)+windup*(e.type==="brute"?.42:e.type==="spitter"?-.55:.23);
+  e.mesh.userData.head.rotation.x=-windup*.12;
+  torso.material.emissive.setHex(e.hitFlash>0?0x6b2616:0x000000);
+  torso.material.emissiveIntensity=e.hitFlash>0?1.15:0;
  }
 }
 function animateLimbs(char,amount){const limbs=char.userData.limbs;if(!limbs)return;limbs[0].rotation.x=amount*.48;limbs[1].rotation.x=-amount*.65;limbs[2].rotation.x=-amount*.48;limbs[3].rotation.x=amount*.65;}
@@ -465,7 +497,7 @@ function updateEffects(dt){
  for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;
  if(e.kind==="spit"){const nx=e.mesh.position.x+e.vx*dt,nz=e.mesh.position.z+e.vz*dt;
   if(blocked(nx,nz,.22)){e.life=0;}else{e.mesh.position.x=nx;e.mesh.position.z=nz;
-    if(dist({x:nx,z:nz},pos())<.8){takeDamage(10);e.life=0;}}}
+    if(dist({x:nx,z:nz},pos())<.8){takeDamage(e.damage||10);e.life=0;}}}
  if(e.mesh.material&&"opacity"in e.mesh.material)e.mesh.material.opacity=clamp(e.life/e.total,0,1)*.9;
  if(e.life<=0){world.remove(e.mesh);if(e.mesh.geometry)e.mesh.geometry.dispose();effects.splice(i,1);}
  }
