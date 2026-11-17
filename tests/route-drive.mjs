@@ -36,8 +36,19 @@ try{
    const code=axis==="x"?(delta>0?"a":"d"):(delta>0?"w":"s");
    const duration=Math.max(90,Math.min(640,Math.abs(delta)*140));
    await page.keyboard.down(code);
-   await page.waitForTimeout(duration);
-   await page.keyboard.up(code);
+   try{
+    await page.waitForTimeout(duration);
+    const afterHold=await snapshot();
+    if(Math.abs(afterHold[axis]-current)<.04){
+     // A short press can fit entirely between two software-rendered frames.
+     await page.waitForFunction(({axis,current})=>Math.abs(window.__ashfordQA.snapshot()[axis]-current)>=.04,
+      {axis,current},{timeout:1000}).catch(error=>{
+       if(error.name!=="TimeoutError")throw error;
+      });
+    }
+   }finally{
+    await page.keyboard.up(code);
+   }
    const next=await snapshot(),remaining=Math.abs(target-next[axis]);
    if(remaining>lastDistance-.07)stalled++;else stalled=0;
    lastDistance=remaining;
