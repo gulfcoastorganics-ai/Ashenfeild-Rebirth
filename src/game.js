@@ -24,7 +24,7 @@ const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,e
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x252e32);
 scene.fog=new THREE.FogExp2(0x2e393c,.013);
-const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,210);
+const camera=new THREE.PerspectiveCamera(64,innerWidth/innerHeight,.1,210);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
 renderer.setSize(innerWidth,innerHeight);
@@ -58,10 +58,24 @@ const stages=[
  {title:"Secure the clinic entrance",desc:"Return to the front doors and secure the clinic gate.",point:{x:44,z:-15},kind:"interact",name:"CLINIC GATE"}
 ];
 const keys={},touch={x:0,y:0,sprint:false};
-let cameraYaw=Math.PI,cameraPitch=.56,lastPointer=null,activeDialog=false;
+let cameraYaw=Math.PI,cameraPitch=.43,lastPointer=null,activeDialog=false;
 let qualityMode="auto";
 const solidMeshes=[];
 const cameraRay=new THREE.Raycaster();
+const fieldFlashlight=new THREE.SpotLight(0xe0e6c4,4.2,24,Math.PI/6,.52,1.8);
+fieldFlashlight.castShadow=false;fieldFlashlight.visible=false;scene.add(fieldFlashlight);
+const fieldFlashlightTarget=new THREE.Object3D();scene.add(fieldFlashlightTarget);
+fieldFlashlight.target=fieldFlashlightTarget;
+let flashlightOn=false;
+function toggleFlashlight(){
+ if(!state.started||state.ended)return;
+ flashlightOn=!flashlightOn;
+ fieldFlashlight.visible=flashlightOn;
+ $("light-button").setAttribute("aria-pressed",String(flashlightOn));
+ $("light-button").textContent=flashlightOn?"LIGHT ON":"LIGHT";
+ tone(flashlightOn?410:200,.055,"triangle",.04);
+}
+
 
 const pos=()=>({x:state.x,z:state.z});
 function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom,material);m.position.set(x,y,z);m.receiveShadow=true;group.add(m);return m}
@@ -714,8 +728,16 @@ function hud(){
  $("hp-num").textContent=Math.ceil(state.health)+" / 100";$("st-num").textContent=Math.ceil(state.stamina)+" / 100";
  $("th-num").textContent=Math.ceil(state.thirst)+"%";$("hu-num").textContent=Math.ceil(state.hunger)+"%";
  $("weapon-name").textContent=state.hasGun?"PISTOL + CROWBAR":"CROWBAR";
+ $("weapon-card-label").textContent=state.hasGun?"SERVICE PISTOL":"UNARMED";
+ $("weapon-card-ammo").textContent=state.hasGun?state.ammo+" ROUNDS":"MELEE READY";
  $("ammo").textContent=state.hasGun?state.ammo+" ROUNDS":"MELEE";
  $("dodge-status").textContent=state.dodgeCooldown>0?"ROLL "+state.dodgeCooldown.toFixed(1)+"s":"ROLL READY";
+ const dayMinutes=16*60+Math.floor(state.time/3);
+ const day=1+Math.floor(dayMinutes/1440),minutes=dayMinutes%1440;
+ const pad=n=>String(n).padStart(2,"0");
+ $("world-clock").textContent="DAY "+day+" · "+pad(Math.floor(minutes/60))+":"+pad(minutes%60)+" · N";
+ $("world-condition").textContent="FOOD "+Math.ceil(state.hunger)+"  WATER "+Math.ceil(state.thirst)+"  FATIGUE "+Math.round(100-state.stamina);
+
  const q=stages[state.stage];$("waypoint-distance").textContent=Math.round(dist(pos(),q.point))+" m";
  $("danger-text").textContent=state.stage===7?"INFECTED ASSAULT · "+state.waveKills+"/4":"AIRBORNE CONTAMINATION";
  if(q.kind==="interact"&&dist(pos(),q.point)<4){$("context").hidden=false;$("context-label").textContent="PRESS E · "+q.name;}else $("context").hidden=true;
@@ -733,7 +755,7 @@ function drawMap(){
  ctx.strokeStyle="#778984";ctx.lineWidth=2;ctx.strokeRect(1,1,w-2,h-2);
 }
 function updateCamera(dt){
- const horizontal=Math.cos(cameraPitch)*12.5,vertical=Math.sin(cameraPitch)*12.5+state.cameraKick*.85;
+ const horizontal=Math.cos(cameraPitch)*8.7,vertical=Math.sin(cameraPitch)*8.7+state.cameraKick*.85;
  const pivot=V(state.x,1.65,state.z);
  const desired=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.65,state.z+Math.cos(cameraYaw)*horizontal);
  const delta=desired.clone().sub(pivot),maxDist=delta.length(),dir=delta.normalize();
@@ -741,6 +763,9 @@ function updateCamera(dt){
  const hits=cameraRay.intersectObjects(solidMeshes,false);
  if(hits.length)desired.copy(pivot).addScaledVector(dir,Math.max(1.5,hits[0].distance-.35));
  camera.position.lerp(desired,1-Math.exp(-dt*8));camera.lookAt(pivot);
+ fieldFlashlight.position.set(state.x,2.22,state.z);
+ fieldFlashlightTarget.position.set(state.x-Math.sin(cameraYaw)*12,1.55,state.z-Math.cos(cameraYaw)*12);
+ fieldFlashlightTarget.updateMatrixWorld();
 }
 function togglePerf(){
  $("perf-panel").hidden=!$("perf-panel").hidden;
@@ -813,7 +838,7 @@ function start(){state.started=true;state.paused=false;$("intro").classList.remo
  if(matchMedia("(pointer:coarse)").matches||innerWidth<750)$("mobile-controls").hidden=false;
  loadGame();setMarker();try{tone(480,.15);}catch(e){}}
 function controls(){
- $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;
+ $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;$("light-button").onclick=toggleFlashlight;
  $("export-perf").onclick=exportPerformanceReport;
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
  $("quality-button").onclick=()=>applyQuality(qualityMode==="auto"?"performance":"auto",true);
@@ -832,7 +857,7 @@ function controls(){
  if(e.repeat)return;
  if(e.code==="Escape"){if($("pack-modal").classList.contains("visible")){resume();return;}if(activeDialog)return;pause();}
  if(e.code==="KeyI"){if($("pack-modal").classList.contains("visible"))resume();else showPack();}
- if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="KeyX")dodge();if(e.code==="Space")melee();
+ if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="KeyL")toggleFlashlight();if(e.code==="KeyX")dodge();if(e.code==="Space")melee();
  });
  addEventListener("keyup",e=>{keys[e.code]=false;});
  addEventListener("blur",()=>{for(const k in keys)keys[k]=false;touch.x=0;touch.y=0;touch.sprint=false;});
