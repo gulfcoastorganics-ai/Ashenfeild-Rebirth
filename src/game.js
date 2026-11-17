@@ -68,6 +68,8 @@ function mesh(geom,material,x=0,y=0,z=0,group=world){const m=new THREE.Mesh(geom
 const unitCube=new THREE.BoxGeometry(1,1,1);
 const unitSphere=new THREE.SphereGeometry(1,10,8);
 const unitCylinder=new THREE.CylinderGeometry(1,1,1,9);
+const sleeveGeometry=new THREE.CylinderGeometry(.15,.18,.8,8);
+const trouserGeometry=new THREE.CylinderGeometry(.16,.19,.87,8);
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function instanced(count,material,transform,geometry=unitCube){
  const group=new THREE.InstancedMesh(geometry,material,count);
@@ -330,15 +332,15 @@ function humanoid(kind="player"){
  const torso=box(0,1.61,0,.85,1.0,.48,zombie?fabric.clone():fabric,false,group);
  box(0,1.11,0,.72,.18,.43,pants,false,group);
  const head=sphere(0,2.42,-.01,.33,skin,group);
- const hair=box(0,2.68,.0,.54,.15,.5,mat(zombie?0x42483e:0x302d29),false,group);
+ const hair=sphere(0,2.69,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.29,.13,.28);
  for(let side of [-1,1]){sphere(side*.13,2.46,-.29,.036,mat(0x1d2220),group);}
  const limbs=[];
  for(let s of [-1,1]){
   const arm=new THREE.Group();arm.position.set(s*.55,2.03,0);group.add(arm);
-  const a=box(0,-.38,0,.29,.8,.31,fabric,false,arm);a.rotation.z=s*.10;
+  const a=mesh(sleeveGeometry,fabric,0,-.38,0,arm);a.castShadow=true;a.rotation.z=s*.10;
   sphere(0,-.80,-.01,.15,skin,arm);limbs.push(arm);
   const leg=new THREE.Group();leg.position.set(s*.23,1.05,0);group.add(leg);
-  box(0,-.40,0,.33,.87,.35,pants,false,leg);
+  const thigh=mesh(trouserGeometry,pants,0,-.40,0,leg);thigh.castShadow=true;
   box(0,-.89,-.10,.37,.20,.55,dark,false,leg);limbs.push(leg);
  }
  if(kind==="player"){
