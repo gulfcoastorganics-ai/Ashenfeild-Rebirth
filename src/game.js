@@ -483,11 +483,11 @@ function spawnEnemy(type,x,z,ambush=false){
 function spawnAmbient(){spawnEnemy("walker",-27,3);spawnEnemy("runner",5,13);spawnEnemy("spitter",32,11);}
 function makeMarker(){
  marker=new THREE.Group();scene.add(marker);
- const beamMat=new THREE.MeshBasicMaterial({color:0xf1ba73,transparent:true,opacity:.12,depthWrite:false});
- const beam=mesh(new THREE.CylinderGeometry(.65,.16,7,18,1,true),beamMat,0,3.6,0,marker);
+ const beamMat=new THREE.MeshBasicMaterial({color:0xd4b879,transparent:true,opacity:.035,depthWrite:false});
+ const beam=mesh(new THREE.CylinderGeometry(.38,.10,6.5,14,1,true),beamMat,0,3.6,0,marker);
  beam.material.side=THREE.DoubleSide;
- markerRing=mesh(new THREE.TorusGeometry(.8,.06,6,48),goldMat,0,.15,0,marker);markerRing.rotation.x=Math.PI/2;
- mesh(new THREE.OctahedronGeometry(.46,0),goldMat,0,5.7,0,marker);
+ markerRing=mesh(new THREE.TorusGeometry(.62,.043,6,36),goldMat,0,.15,0,marker);markerRing.rotation.x=Math.PI/2;
+ mesh(new THREE.OctahedronGeometry(.33,0),goldMat,0,5.4,0,marker);
 }
 function setMarker(){const obj=stages[state.stage];if(!obj){marker.visible=false;return;}marker.visible=true;marker.position.set(obj.point.x,0,obj.point.z);refreshObjective();}
 function refreshObjective(){
@@ -935,7 +935,7 @@ function animate(){
   hud();
   if(state.lastSave>12){saveGame();state.lastSave=0;}
  }
- if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.7+Math.sin(performance.now()*.002)*.18;}
+ if(marker){markerRing.rotation.z+=frameDt*.8;marker.children[2].rotation.y+=frameDt*.75;marker.children[2].position.y=5.4+Math.sin(performance.now()*.002)*.18;}
  updateCamera(frameDt);drawMap();lightBudgetElapsed+=frameDt;if(lightBudgetElapsed>=.38){updateLightBudget();lightBudgetElapsed=0;}renderer.render(scene,camera);
  perfPanelElapsed+=elapsed;if(perfPanelElapsed>.9){updatePerfReadout();perfPanelElapsed=0;}
  // Measure actual elapsed frame time rather than capped physics delta.
