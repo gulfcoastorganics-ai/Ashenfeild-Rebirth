@@ -4,6 +4,23 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.9 — Opening-route production pass
+
+Market storefront and register lighting, clinic side-ward curtains and fluorescent
+lighting, and patrol-car trim were refined using procedural art. Regional instance
+batches cull street details more precisely. The survivor's foot cycle follows
+actual distance traveled, and the smoothed camera is constrained by solid walls.
+
+The pause menu offers **Auto**, **Performance**, **Balanced** and **Quality**.
+**Auto** starts at Balanced and adapts during play without changing the saved
+selection. **Performance** reduces resolution and disables shadows and ambient
+particles. **Balanced** caps render pixel ratio at 1.0. **Quality** raises that
+cap to 1.6 on high-density screens. Press **P** to see the effective tier and
+export local measurements.
+
+See the [V0.9 production audit](V09-PRODUCTION-AUDIT.md) for findings, rollback,
+the matched render comparison, and hardware verification limits.
+
 ## V0.8 — Screenshot-Reference Visual Overhaul
 
 **Reference:** User-supplied ChromeOS screenshot of the *original* Ashford 3D clinic, used only for composition and styling guidance. This is still a separate, original-code reconstruction—not an export of the Sites v7.1 game, its models, or its animation rigs.

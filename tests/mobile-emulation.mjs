@@ -44,6 +44,18 @@ try{
  const after=await page.evaluate(()=>window.__ashfordQA.snapshot());
  const travel=Math.hypot(before.x-after.x,before.z-after.z);
  assert(travel>.10,"Joystick did not move survivor; distance="+travel.toFixed(2));
+ // Send two simultaneous touch pointers to exercise independent movement and sprint capture.
+ const sprint=await page.locator("#mobile-sprint").boundingBox();
+ const cdp=await ctx.newCDPSession(page);
+ const stickPoint={x,y,id:1};
+ const runPoint={x:sprint.x+sprint.width/2,y:sprint.y+sprint.height/2,id:2};
+ await cdp.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[stickPoint,runPoint]});
+ await cdp.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{...stickPoint,y:y-32},runPoint]});
+ await page.waitForFunction(initial=>window.__ashfordQA.snapshot().stamina<initial-1,after.stamina,{timeout:10000});
+ await cdp.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
+ const released=await page.evaluate(()=>window.__ashfordQA.snapshot());
+ await page.waitForFunction(initial=>window.__ashfordQA.snapshot().stamina>initial+1,released.stamina,{timeout:10000});
+ assert(await page.locator(".environment-readout").isVisible(),"Mobile food and water readout missing");
  // The FPS toggle remains usable on small viewports.
  await page.locator("#perf-button").tap();
  assert(await page.locator("#perf-panel").isVisible());
