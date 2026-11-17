@@ -1,5 +1,5 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
-import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,restoreCheckpoint} from "./nav.mjs";
+import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,findPath as findRoute,restoreCheckpoint} from "./nav.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -247,7 +247,8 @@ function spawnEnemy(type,x,z,ambush=false){
  const c=humanoid(type);c.position.set(x,0,z);world.add(c);
  enemies.push({type,mesh:c,x,z,hp:type==="brute"?175:type==="runner"?52:75,max:type==="brute"?175:type==="runner"?52:75,
  speed:type==="runner"?4.25:type==="brute"?1.6:type==="spitter"?1.9:2.25,
- cd:rand(.1,1.0),phase:rand(0,10),dead:false,death:0,ambush});
+ cd:rand(.1,1.0),phase:rand(0,10),dead:false,death:0,ambush,
+ route:[],routeTimer:rand(.05,.45),routeTarget:{x:NaN,z:NaN}});
 }
 function spawnAmbient(){spawnEnemy("walker",-27,3);spawnEnemy("runner",5,13);spawnEnemy("spitter",32,11);}
 function makeMarker(){
@@ -320,18 +321,23 @@ function updateEnemies(dt){
  const e=enemies[i];if(e.dead){e.death-=dt;e.mesh.rotation.z=Math.min(1.4,e.mesh.rotation.z+dt*2.3);e.mesh.position.y=-Math.max(0,1.7-e.death)*.20;if(e.death<=0){world.remove(e.mesh);enemies.splice(i,1);}continue;}
  e.phase+=dt*(e.type==="runner"?9:5);e.cd-=dt;const d=dist(p,e);
  if(d<38&&d>1.2&&state.started&&!state.paused){
-  const goal=chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
+  e.routeTimer-=dt;
+  // A* runs when the target moves meaningfully or on a spaced cooldown.
+  // Direct unobstructed pursuit remains cheap, while static walls use cached waypoints.
+  if(e.routeTimer<=0||dist(p,e.routeTarget)>3){
+   e.route=findRoute(e,p,obstacles,{step:1.75,clearance:.45,maxVisited:4400});
+   if(!e.route.length)e.route=findRoute(e,chaseGoal(e,p),obstacles,{step:1.75,clearance:.45,maxVisited:2200});
+   e.routeTimer=rand(.85,1.45);
+   e.routeTarget={x:p.x,z:p.z};
+  }
+  while(e.route.length>1&&dist(e,e.route[0])<.6)e.route.shift();
+  const goal=e.route[0]||chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
   const dx=(goal.x-e.x)/gd,dz=(goal.z-e.z)/gd;
   let nx=e.x+dx*speed,nz=e.z+dz*speed;
-  // Avoid tunneling through buildings and guide attackers through entrances.
-  if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;}
+  if(!blocked(nx,nz,.42)&&!lineBlocked(e.x,e.z,nx,nz,.42)){e.x=nx;e.z=nz;}
   else if(!blocked(nx,e.z,.42)){e.x=nx;}
   else if(!blocked(e.x,nz,.42)){e.z=nz;}
-  else {
-   const side=V(-dz,0,dx);
-   for(const sign of [1,-1]){nx=e.x+side.x*sign*speed;nz=e.z+side.z*sign*speed;
-     if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;break;}}
-  }
+  else {e.routeTimer=0;}
   e.mesh.rotation.y=Math.atan2(-dx,-dz);
  }
  if(d<1.55&&e.cd<=0&&!lineBlocked(e.x,e.z,p.x,p.z,.10)){takeDamage(e.type==="brute"?23:e.type==="runner"?9:12);e.cd=e.type==="runner"?.75:1.5;}
