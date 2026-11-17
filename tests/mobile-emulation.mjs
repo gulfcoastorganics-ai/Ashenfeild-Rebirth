@@ -22,7 +22,7 @@ try{
  const page=await ctx.newPage(),errors=[];
  page.on("pageerror",e=>errors.push(e.message));
  await page.goto("http://127.0.0.1:"+server.address().port+"/?__qa=1",{waitUntil:"domcontentloaded",timeout:90000});
- await page.locator("#loader.hide").waitFor({timeout:90000});
+ await page.locator("#loader").waitFor({state:"detached",timeout:90000});
  await page.locator("#start-button").tap();
  assert(await page.locator("#hud").isVisible());
  assert(await page.locator("#mobile-controls").isVisible());

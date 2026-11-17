@@ -23,7 +23,7 @@ try{
  const errors=[];page.on("pageerror",e=>errors.push(e.message));
  await page.goto("http://127.0.0.1:"+server.address().port+"/?__qa=1",{waitUntil:"domcontentloaded",timeout:90000});
  await page.waitForFunction(()=>Boolean(window.__ashfordQA),null,{timeout:60000});
- await page.locator("#loader.hide").waitFor({timeout:60000});
+ await page.locator("#loader").waitFor({state:"detached",timeout:60000});
  await page.locator("#start-button").click();
  await page.evaluate(()=>window.__ashfordQA.referenceView(44,-25.7,0,6));
  await page.waitForTimeout(1100);
