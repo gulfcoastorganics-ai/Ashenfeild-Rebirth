@@ -2,6 +2,7 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.m
 import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,findPath as findRoute,restoreCheckpoint} from "./nav.mjs";
 import {WEAPONS,INFECTED,ATTACK_RANGE,SPIT_RANGE,chooseTarget,applyHit,chooseInfectedAction,attackStillValid} from "./combat.mjs";
 import {DODGE,canDodge,normalize2D,summarizeFrames} from "./survival.mjs";
+import {carBody,faceGeometry,floorboards,masonry,sidewalkTexture} from "./art.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -22,8 +23,8 @@ function materialCacheHas(material){for(const item of materialCache.values()){if
 const coal=mat(0x21282a), asphalt=mat(0x292c2d), concrete=mat(0x555b57), dust=mat(0x7a7060), brick=mat(0x5f5551), panel=mat(0x6c726d), glass=mat(0x39595a,.25,.15), dark=mat(0x1b2225);
 const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,emissiveIntensity:.5,roughness:.3});
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x252e32);
-scene.fog=new THREE.FogExp2(0x2e393c,.013);
+scene.background=new THREE.Color(0x465153);
+scene.fog=new THREE.FogExp2(0x58605d,.014);
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,210);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
@@ -34,8 +35,8 @@ renderer.toneMappingExposure=1.10;
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 $("game").appendChild(renderer.domElement);
-const hemi=new THREE.HemisphereLight(0x98acb5,0x252219,1.4);scene.add(hemi);
-const moon=new THREE.DirectionalLight(0xddd5c1,1.8);moon.position.set(-21,40,22);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0004;scene.add(moon);
+const hemi=new THREE.HemisphereLight(0xafc0c5,0x494134,1.65);scene.add(hemi);
+const moon=new THREE.DirectionalLight(0xffdfb6,1.6);moon.position.set(-21,40,22);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0004;scene.add(moon);
 const world=new THREE.Group();scene.add(world);
 const obstacles=[],enemies=[],effects=[],lamps=[],localLights=[];
 let lightBudgetElapsed=0;
@@ -92,9 +93,6 @@ const unitCube=new THREE.BoxGeometry(1,1,1);
 const unitSphere=new THREE.SphereGeometry(1,10,8);
 const canopyGeometry=new THREE.SphereGeometry(1,7,5);
 const unitCylinder=new THREE.CylinderGeometry(1,1,1,9);
-const sleeveGeometry=new THREE.CylinderGeometry(.15,.18,.8,8);
-const trouserGeometry=new THREE.CylinderGeometry(.17,.19,.87,9);
-const jacketTorsoGeometry=new THREE.CylinderGeometry(.49,.35,1.05,10);
 function box(x,y,z,w,h,d,material,solid=false,group=world){const m=mesh(unitCube,material,x,y,z,group);m.scale.set(w,h,d);m.castShadow=h>.45;if(solid){obstacles.push({x,z,w,d});solidMeshes.push(m);}return m}
 function instanced(count,material,transform,geometry=unitCube){
  const group=new THREE.InstancedMesh(geometry,material,count);
@@ -239,7 +237,9 @@ function proceduralSurface(base,seed=1,repeatX=2,repeatY=1){
 function wornSurface(base,seed=1,x=2,y=1){return new THREE.MeshStandardMaterial({map:proceduralSurface(base,seed,x,y),roughness:.95});}
 function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safehouse"}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
- const tile=matUnique(0xffffff);tile.map=theme==="clinic"?referenceClinicFloor():interiorFloorTexture(w,d,theme);tile.needsUpdate=true;
+ const tile=matUnique(0xffffff);
+ tile.map=theme==="clinic"?referenceClinicFloor():theme==="safehouse"?floorboards(w,d):interiorFloorTexture(w,d,theme);
+ tile.needsUpdate=true;
  // Lift interior finish above the base world ground to eliminate coplanar depth fighting.
  box(cx,.057,cz,w,.028,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
@@ -276,12 +276,72 @@ function clinicCeiling(){
  const spill=mesh(new THREE.PlaneGeometry(9.3,2.6),new THREE.MeshBasicMaterial({map,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}),45,4.897,-30.05);
  spill.rotation.x=Math.PI/2;spill.receiveShadow=false;
 }
+function ceilingPanel(x,z,width,depth,tint){
+ const ceiling=mesh(new THREE.PlaneGeometry(width,depth),tint,x,4.91,z);
+ ceiling.rotation.x=Math.PI/2;
+}
+function dressSafehouse(){
+ const plaster=masonry("#706c59",574,5,1),stud=mat(0x514235),timber=masonry("#654c38",588,2,1);
+ ceilingPanel(-49,-26,24.4,22.4,plaster);
+ for(const z of [-33,-25,-17])box(-49,4.76,z,24.5,.24,.23,stud);
+ box(-49,2.43,-37.10,24.25,4.78,.04,plaster);
+ for(const x of [-61.12,-36.88]){
+  box(x,2.43,-26,.04,4.78,22.27,plaster);
+  box(x,.56,-26,.08,.18,22.2,stud);
+ }
+ // Fixed debris and furniture stay against the walls, clear of the exit route.
+ const block=mat(0x4a4437),fabric=masonry("#666451",608,1,1);
+ for(const x of [-59,-55,-41,-38.4])box(x,.59,-36.16,2.26,1.05,1.2,timber);
+ for(const [x,z] of [[-56.8,-31.8],[-40.6,-35],[-43,-32.8]]){
+  const crate=box(x,.37,z,1.1,.62,.85,block);crate.rotation.y=.28;
+  const lid=box(x,.69,z,1.15,.075,.88,stud);lid.rotation.y=.28;
+ }
+ box(-54,.98,-30,2.7,.28,1.45,fabric);
+ box(-54,1.17,-30.42,2.4,.11,.51,mat(0x8e8268));
+ const blanket=box(-53.2,1.16,-29.84,.84,.14,.9,mat(0x6b5947));blanket.rotation.y=-.13;
+ for(const x of [-53.2,-52,-50.8,-44.9,-43.7,-42.5]){
+  box(x,2.09,-14.22,.12,4,.18,stud);
+ }
+ for(const x of [-51.19,-42.81])for(const y of [1.35,2.42,3.43]){
+  const board=box(x,y,-14.04,1.44,.22,.12,timber);board.rotation.z=(Math.round(y*10)%2?.12:-.16);
+ }
+ box(-47,4.26,-14.39,7.52,.26,.42,stud);
+ for(const x of [-50.61,-43.39])box(x,2.21,-14.38,.17,4.35,.38,stud);
+}
+function dressStreet(){
+ const masonryA=masonry("#65544a",707,4,2,true),masonryB=masonry("#6b685b",708,4,1),roof=mat(0x383d38),sill=mat(0x55483a),window=mat(0x28363a,.35,.22);
+ const buildings=[[-66,29,13,11,5.6],[-48,21,15,12,5.2],[-29,23,14,12,6.8],[-9,27,16,13,5.9],[11,27,13,12,6.4],[31,23,17,11,5.1],[54,28,18,12,6.9],[70,24,10,12,4.9]];
+ for(const [i,[x,z,w,d,h]] of buildings.entries()){
+  const facade=z-d/2-.05;
+  box(x,h/2,z,w,h,d,i%2?masonryA:masonryB,true);
+  box(x,h+.04,z,w+.6,.23,d+.55,roof);
+  box(x,3.16,facade,w+.1,.18,.21,sill);
+  box(x,1.37,facade-.02,1.45,2.67,.18,roof);
+  for(const offset of [-.29,.29]){
+   box(x+w*offset,2.04,facade,2.3,1.61,.075,window);
+   box(x+w*offset,1.23,facade-.04,2.52,.11,.15,sill);
+  }
+ }
+ // Outside the playable yards a second row breaks up the flat skyline.
+ for(const [x,w,h] of [[-56,25,9],[-21,17,10],[9,20,8],[38,22,11],[67,17,7]]){
+  box(x,h/2,48,w,h,9,mat(0x565954),true);
+  box(x,h+.05,47.2,w+.5,.26,9.25,roof);
+ }
+ const stains=Array.from({length:42},(_,i)=>{
+  const x=-70+i*3.42,z=i%2===0?-7.53:7.53;
+  return {x,y:.061,z,w:.57+(i%5)*.28,h:.008,d:.22+(i%3)*.11,rot:(i%4)*.11};
+ });
+ instancedByRegion(stains,mat(0x312e28));
+}
 function makeWorld(){
  // Single reusable 256px procedural roadway texture; detail without external assets.
  asphalt.map=gritTexture();asphalt.color.set(0xffffff);asphalt.needsUpdate=true;
- floor(0,0,160,140,mat(0x343d36));
+ // Terrain sits below the road and sidewalk to keep their textures stable.
+ box(0,-.039,0,160,.076,140,mat(0x343d36));
  // Asphalt, sidewalk, gutters, and lane paint
- floor(0,0,145,16,asphalt);floor(0,-10,145,4,concrete);floor(0,10,145,4,concrete);
+ const sidewalk=new THREE.MeshStandardMaterial({map:sidewalkTexture(),roughness:.96});
+ floor(0,0,145,16,asphalt);floor(0,-10,145,4,sidewalk);floor(0,10,145,4,sidewalk);
+ dressStreet();
  box(0,.08,-8,145,.17,.32,dust);box(0,.08,8,145,.17,.32,dust);
  instanced(15,mat(0xc7b48b),i=>({x:-66+i*9,y:.063,z:0,w:4,h:.018,d:.15}));
  // worn asphalt seam lines and cracks
@@ -294,17 +354,19 @@ function makeWorld(){
   w:rand(.25,1.5),h:rand(.18,.7),d:1,rx:-Math.PI/2
  }),new THREE.CircleGeometry(1,20));
  // Safehouse
- house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:wornSurface(0x505452,121),theme:"safehouse"});
+ house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:masonry("#625745",121,6,2,true),theme:"safehouse"});
+ dressSafehouse();
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
  const safeLamp=box(-49,4.73,-19.2,1.9,.13,.38,matUnique(0xf3d7a3));
  safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
- addLight(-48,3.7,-24,0xffd1a0,7,20);
+ addLight(-46.6,3.74,-20.9,0xffd5a6,17,19);
  box(-54,.62,-30,3,1.2,2,dark,true);box(-40,.6,-32,1.8,1.1,1.6,mat(0x6a5844));
  windowPanel(-56,2.45,-14.32,2.9,1.9);
  for(let i=0;i<3;i++)box(-56+i*.8,2.5,-14.1,.1,2.4,.12,mat(0x6a5842));
  box(-47,2.3,-13.65,5.8,3.9,.12,mat(0x343c39,.95),false).visible=false;
  // market
- house({cx:-11,cz:-26,w:26,d:24,frontGap:9,doorX:-11,color:wornSurface(0x60594d,229),theme:"market"});
+ house({cx:-11,cz:-26,w:26,d:24,frontGap:9,doorX:-11,color:masonry("#625548",229,6,2,true),theme:"market"});
+ ceilingPanel(-11,-26,25.4,23.4,masonry("#4d5145",213,4,4));
  const marketSign=label("LAST STOP MARKET",19,2.2,"#2d3534","#dfaa6d",78);marketSign.position.set(-11,4.35,-13.56);world.add(marketSign);
  const marketPane=marketWindowMaterial();
  for(const x of [-20,-2]){
@@ -326,7 +388,8 @@ function makeWorld(){
  const stockColors=[0x7f6651,0x607a71,0x958456,0x444f5d],stockGroups=stockColors.map(()=>[]);
  for(let x of [-6,-2,0]){if(x===0)continue;
   for(let z of [-34,-27,-21]){if(x===-6 && z===-27)continue;
-   box(x,1.0,z,1.35,2.0,3.0,mat(0x454840));
+   for(const offset of [-1.42,1.42])for(const side of [-.59,.59])box(x+side,1.02,z+offset,.07,1.94,.075,coal);
+   box(x,.99,z,.08,1.42,2.84,mat(0x56534b));
    for(let row=0;row<3;row++){box(x,1.68-row*.55,z,1.5,.12,3.12,mat(0x6a6554));
     for(let k=0;k<4;k++)stockGroups[(row+k)%4].push({
       x:x+rand(-.32,.32),y:1.85-row*.55,z:z-1.1+k*.72,
@@ -335,14 +398,19 @@ function makeWorld(){
    }
   }
  }
- stockGroups.forEach((items,i)=>instanced(items.length,mat(stockColors[i]),j=>items[j]));
+ stockGroups.forEach((items,i)=>{
+  const cans=items.filter((_,j)=>j%3===0),packs=items.filter((_,j)=>j%3!==0);
+  instanced(packs.length,mat(stockColors[i]),j=>packs[j]);
+  instanced(cans.length,mat(stockColors[i],.57,.24),j=>({...cans[j],w:.135,d:.135}),unitCylinder);
+ });
  box(-7,.5,-29,1.3,1,1.3,mat(0x6b6049));box(-7,1.03,-29,1.35,.11,1.35,mat(0xa28a5b));
  addLight(-15,3.65,-27,0xffae6a,12,21);
  addLight(-5,4,-21,0xc39159,3.4,15);
  for(let z of [-27,-34]){const fixture=box(-11,4.70,z,2.35,.14,.31,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
- house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:wornSurface(0x768080,331),theme:"clinic"});
- const clinicSign=label("ASHFORD CLINIC",20,2.15,"#253b43","#b8dce0",75);clinicSign.position.set(45,4.4,-12.65);world.add(clinicSign);
+ house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:masonry("#747973",331,5,2),theme:"clinic"});
+ box(44,4.31,-12.61,13.6,1.17,.22,mat(0x343d3e));
+ const clinicSign=label("ASHFORD CLINIC",13.4,1.07,"#253b43","#b8dce0",94);clinicSign.position.set(44,4.31,-12.48);world.add(clinicSign);
  windowPanel(34,2.3,-12.65,4,2.5);windowPanel(56,2.3,-12.65,4,2.5);
  for(let x of [34,55])box(x,3.66,-12.54,5.5,.20,.09,mat(0x4b6d71));
  box(44,.12,-12.3,8,.03,.65,mat(0xc1bb9f));
@@ -402,10 +470,20 @@ function makeWorld(){
  instanced(10,paperMat,i=>({x:33+(i*7%25),y:.119,z:-34+(i*5%19),w:.34,h:.015,d:.23,rot:i*.8}));
  // Clinic wayfinding
  for(let z of [-30,-22]){const strip=box(43,.089,z,15,.014,.15,mat(0x9bafad));}
- for(let x of [34,53]){for(let z of [-33,-24]){box(x,.42,z,3,.8,1,mat(0x697b79),true);
- box(x,1.04,z,3,.09,1,mat(0x909f9b));
- for(let j=-1;j<=1;j++)cyl(x+j*.65,1.35,z,.14,.5,mat(0x8a9998));
- }}
+ const frame=mat(0x727970,.55,.3),linen=masonry("#8a8d7d",643,1,1),rail=mat(0x8d9287,.54,.32);
+ for(const x of [34,53])for(const z of [-33,-24]){
+  const obstacle=box(x,.42,z,3,.8,1,frame,true);
+  obstacle.visible=false;
+  box(x,.74,z,2.95,.15,1,frame);
+  box(x,.88,z,2.78,.16,.91,linen);
+  box(x+1.05,1,z,.51,.12,.73,mat(0xada995));
+  for(const side of [-1,1]){
+   box(x+side*1.35,.47,z,.12,.56,.86,frame);
+   box(x+side*1.4,1.04,z,.13,.35,.96,rail);
+   box(x,.99,z+side*.48,2.53,.045,.055,rail);
+   for(const offset of [-.33,.33]){const wheel=cyl(x+side*1.22,.164,z+offset,.105,.065,coal);wheel.rotation.x=Math.PI/2;}
+  }
+ }
  // Reuse simple geometry as recognizable clinic details without new mesh imports.
  const medCabinet=mat(0x87938e),medTrim=mat(0xb8c4bd),red=mat(0x9b443e);
  for(const [x,z] of [[39,-36],[50,-35],[35,-19],[56,-20]]){
@@ -457,34 +535,50 @@ function makeWorld(){
  batchStaticProps();
 }
 function lamp(x,z,lit){cyl(x,2.7,z,.12,5.4,coal);box(x,5.42,z,.7,.25,1.1,dark);if(lit){addLight(x,5.4,z,0xe9af70,4,14);sphere(x,5.42,z,.24,new THREE.MeshBasicMaterial({color:0xf0bd83}));}}
+const sedanChassis=carBody([[-2.39,.42,.68,.91],[-2.12,.33,.92,1.01],[-1.53,.31,.92,1.035],[.99,.31,.91,1.025],[1.75,.33,.82,1.005],[2.27,.36,.77,.95],[2.39,.44,.66,.895]]);
+const sedanCabin=carBody([[-1.45,.84,.96,.93],[-.82,.84,1.51,.82],[.39,.84,1.51,.82],[1.23,.84,.93,.93]]);
+const sedanRoof=carBody([[-.9,1.445,1.49,.805],[-.7,1.47,1.53,.82],[.32,1.47,1.53,.82],[.49,1.445,1.49,.805]]);
 function makeCar(x,z,color,police=false){
  const car=new THREE.Group();car.position.set(x,0,z);world.add(car);
- box(0,.63,0,4.6,.7,2.1,mat(color,.48,.35),false,car);
- box(-.2,1.12,0,2.5,.67,1.86,glass,false,car);
- box(-.18,1.42,0,2.1,.09,1.82,dark,false,car);
- for(let dx of [-1.45,1.45])for(let dz of [-1,1]){const wheel=cyl(dx,.4,dz,.39,.20,coal,car);wheel.rotation.x=Math.PI/2;}
- box(2.28,.67,-.7,.07,.21,.5,mat(0xf2ddad),false,car);box(2.28,.67,.7,.07,.21,.5,mat(0xf2ddad),false,car);
- if(police){box(-.1,1.53,0,1.0,.16,.27,mat(0x2a2e31),false,car);box(-.44,1.56,0,.34,.16,.28,mat(0x315e94),false,car);box(.28,1.56,0,.34,.16,.28,mat(0x9f3f3c),false,car);
-  const trim=mat(0x68706e,.66,.32),stripe=mat(0x96958b,.72,.14);
-  for(const side of [-1,1]){
-   box(.08,.56,side*1.055,3.25,.16,.035,stripe,false,car);
-   box(-.61,.80,side*1.08,.26,.055,.041,trim,false,car);
-   box(.74,.80,side*1.08,.26,.055,.041,trim,false,car);
-   box(-2.31,.66,side*.72,.065,.24,.39,mat(0x723b37,.42),false,car);
-  }
-  box(-2.29,.43,0,.30,.17,2.03,dark,false,car);
-  box(2.32,.47,0,.20,.18,1.99,dark,false,car);
-  const policeSign=label("ASHFORD COUNTY",2.7,.39,"#313940","#d1d5d3",71);policeSign.position.set(.15,.78,1.079);car.add(policeSign);
+ const paint=mat(color,.62,.22),rubber=mat(0x242420),trim=mat(0x646762,.49,.45),windshield=mat(0x334749,.31,.36);
+ mesh(sedanChassis,paint,0,0,0,car).castShadow=true;
+ mesh(sedanCabin,windshield,0,0,0,car).castShadow=true;
+ mesh(sedanRoof,paint,0,0,0,car).castShadow=true;
+ for(const dx of [-1.46,1.47])for(const side of [-1,1]){
+  const tire=cyl(dx,.43,side*.99,.414,.25,rubber,car);
+  tire.rotation.x=Math.PI/2;
+  const rim=cyl(dx,.43,side*1.121,.267,.028,trim,car);
+  rim.rotation.x=Math.PI/2;
+  const hub=cyl(dx,.43,side*1.14,.09,.018,rubber,car);
+  hub.rotation.x=Math.PI/2;
+ }
+ for(const side of [-1,1]){
+  const zEdge=side*1.02;
+  box(-.1,.38,zEdge,3.16,.105,.044,rubber,false,car);
+  box(.10,1.19,side*.795,.086,.52,.065,rubber,false,car);
+  box(.81,1.02,side*.98,.23,.115,.14,paint,false,car);
+  for(const dx of [-.56,.72])box(dx,.806,zEdge,.19,.042,.022,trim,false,car);
+  box(2.31,.642,side*.626,.075,.17,.49,mat(0xd2bf97,.34,.16),false,car);
+  box(-2.335,.616,side*.67,.075,.19,.46,mat(0x7d372d,.42),false,car);
+  if(police)box(-.02,.62,side*1.047,3.22,.11,.018,mat(0x888982,.72,.14),false,car);
+ }
+ box(2.36,.516,0,.10,.19,1.79,rubber,false,car);
+ box(-2.36,.496,0,.10,.19,1.85,rubber,false,car);
+ box(2.394,.555,0,.017,.112,.415,trim,false,car);
+ if(police){
+  box(-.08,1.584,0,.27,.078,1.32,rubber,false,car);
+  for(const [side,color] of [[-1,0x345572],[1,0x893e38]])box(-.08,1.628,side*.40,.25,.077,.58,mat(color,.36,.2),false,car);
+  const sign=label("ASHFORD COUNTY",2.52,.247,"#333d40","#c4c4b3",84);
+  sign.position.set(.08,.72,1.05);car.add(sign);
  }
 }
-function makeTree(x,z){cyl(x,1.35,z,.25,2.7,mat(0x55483a));for(let i=0;i<3;i++)sphere(x+rand(-.6,.6),3.2+rand(-.3,.7),z+rand(-.5,.5),rand(.9,1.5),mat([0x47574d,0x59604b,0x3d4c45][i]));}
 function plaidTexture(){
  const c=document.createElement("canvas");c.width=c.height=512;
- const ctx=c.getContext("2d");ctx.fillStyle="#171a1a";ctx.fillRect(0,0,512,512);
+ const ctx=c.getContext("2d");ctx.fillStyle="#533434";ctx.fillRect(0,0,512,512);
  // Screenshot reference: bright red, dense charcoal plaid with narrow dark seams.
  for(let k=0;k<512;k+=128){
-  ctx.fillStyle="#8e262c";ctx.fillRect(k+4,0,63,512);ctx.fillRect(0,k+5,512,63);
-  ctx.fillStyle="rgba(192,65,57,.58)";ctx.fillRect(k+18,0,9,512);ctx.fillRect(0,k+19,512,9);
+  ctx.fillStyle="rgba(130,48,47,.57)";ctx.fillRect(k+4,0,63,512);ctx.fillRect(0,k+5,512,63);
+  ctx.fillStyle="rgba(154,66,58,.56)";ctx.fillRect(k+18,0,9,512);ctx.fillRect(0,k+19,512,9);
   ctx.fillStyle="rgba(23,26,27,.8)";ctx.fillRect(k+68,0,14,512);ctx.fillRect(0,k+68,512,14);
  }
  for(let k=0;k<512;k+=32){
@@ -515,6 +609,33 @@ const jacketShape=bodyProfile([[.85,0],[.96,.06],[.91,.29],[1,.61],[1.02,.81],[.
 const sleeveShape=bodyProfile([[.72,0],[.89,.05],[.88,.26],[.95,.48],[1,.67],[.91,.8],[.55,.87]]);
 const trouserShape=bodyProfile([[.64,0],[.76,.08],[.81,.34],[.89,.55],[1,.72],[.97,.94],[.76,1]]);
 const neckShape=bodyProfile([[.98,0],[1,.13],[.8,.27]]);
+const detailedFace=faceGeometry(true),distantFace=faceGeometry(false);
+function faceMaterial(color){return new THREE.MeshStandardMaterial({color,roughness:.88,vertexColors:true});}
+const faceMaterials={
+ player:faceMaterial(0xb28970),mara:faceMaterial(0x9f745c),vale:faceMaterial(0xb38d76),guard:faceMaterial(0xa2836b),
+ walker:faceMaterial(0x81867b),runner:faceMaterial(0x8d8876),brute:faceMaterial(0x817b6f),spitter:faceMaterial(0x88927b)
+};
+const lids=mat(0x534136),sclera=mat(0x8d8374,.61),iris=mat(0x362d25,.52),lips=mat(0x75564c);
+function humanFeature(geometry,material,parent,x,y,z,sx,sy,sz,castsShadow=true){
+ const part=mesh(geometry,material,x,y,z,parent);
+ part.scale.set(sx,sy,sz);part.castShadow=castsShadow;
+ return part;
+}
+function sculptHead(head,kind,skin,infected){
+ const geometry=infected?distantFace:detailedFace,material=faceMaterials[kind];
+ const scale=kind==="mara"?.94:kind==="brute"?1.09:1;
+ const headMesh=humanFeature(geometry,material,head,0,0,-.024,.222*scale,.306*scale,.222*scale);
+ if(infected)headMesh.rotation.z=kind==="runner"?-.085:.035;
+ for(const side of [-1,1]){
+  const x=side*.083*scale;
+  humanFeature(canopyGeometry,skin,head,side*.212*scale,-.041,.007,.039,.070,.037);
+  const brow=humanFeature(canopyGeometry,lids,head,x,.071,-.224*scale,.050,.015,.016,false);
+  brow.rotation.z=side*.12;
+  humanFeature(canopyGeometry,infected?mat(0x929282):sclera,head,x,.034,-.228*scale,.039,.015,.018,false);
+  if(!infected)humanFeature(canopyGeometry,iris,head,x,.035,-.246*scale,.013,.014,.008,false);
+ }
+ humanFeature(canopyGeometry,infected?mat(0x514940):lips,head,0,-.125,-.247*scale,.064,.011,.017,false);
+}
 const survivorHairShape=new THREE.SphereGeometry(1,14,9,0,Math.PI*2,0,Math.PI*.58);
 const roundedGear=(()=>{
  const shape=new THREE.Shape();
@@ -554,22 +675,13 @@ function createSurvivor(kind){
  const torso=new THREE.Group();torso.position.y=1.13;group.add(torso);
  const head=new THREE.Group();head.position.set(0,1.26,-.015);torso.add(head);
  const skin=outfit?.skin??mat(0xaa8065),boot=mat(kind==="vale"?0x77786c:0x392d20),sole=mat(0x242321),edge=mat(0x252d23),straps=mat(0x55624b),metal=mat(0x888374,.56,.5);
- function shaped(geometry,material,parent,x,y,z,sx,sy,sz){
-  const part=mesh(geometry,material,x,y,z,parent);
-  part.scale.set(sx,sy,sz);part.castShadow=true;
-  return part;
- }
- shaped(jacketShape,top,torso,0,0,0,.45,1,.27);
- shaped(neckShape,skin,torso,0,1.01,0,.135,1,.13);
- shaped(unitSphere,skin,head,0,0,-.027,.227,.312,.235);
- shaped(unitSphere,skin,head,0,-.13,-.07,.181,.17,.173);
- shaped(survivorHairShape,hairCloth,head,0,.045,.012,.237,.324,.241).rotation.x=-.17;
- shaped(unitSphere,hairCloth,head,0,-.09,.178,.151,.075,.064);
- shaped(unitSphere,skin,head,0,-.02,-.247,.054,.078,.055);
- for(const side of [-1,1]){
-  shaped(unitSphere,skin,head,.221*side,-.04,.005,.038,.076,.046);
-  box(.091*side,.037,-.238,.067,.024,.025,mat(0x392d27),false,head);
- }
+ const shaped=humanFeature;
+ shaped(jacketShape,top,torso,0,0,0,.439,1,.245);
+ shaped(neckShape,skin,torso,0,1.01,0,.123,1,.116);
+ sculptHead(head,kind,skin,false);
+ const cap=shaped(survivorHairShape,hairCloth,head,0,.049,.025,.226,.308,.228);
+ cap.rotation.x=kind==="mara"?-.005:-.21;
+ shaped(unitSphere,hairCloth,head,0,-.067,.146,.157,.083,.092);
  shaped(roundedGear,pants,group,0,1.13,.009,.66,.28,.42);
  const limbs=[];
  for(const side of [-1,1]){
@@ -585,13 +697,15 @@ function createSurvivor(kind){
   limbs.push(leg);
  }
  if(kind==="player"){
+  box(0,.489,-.244,.037,.833,.028,mat(0x42322d),false,torso);
+  for(const y of [.194,.365,.539,.717])box(.009,y,-.263,.031,.027,.011,metal,false,torso);
   shaped(roundedGear,packCloth,torso,0,.52,.402,.665,.96,.425);
   shaped(roundedGear,edge,torso,0,.489,.623,.533,.655,.082);
   shaped(roundedGear,packCloth,torso,0,.423,.682,.482,.485,.095);
   box(0,.684,.733,.39,.031,.025,straps,false,torso);
   box(0,.925,.432,.218,.082,.098,edge,false,torso);
   for(const side of [-1,1]){
-   const strap=box(side*.276,.473,-.252,.086,.824,.067,edge,false,torso);strap.rotation.z=side*.10;
+   const strap=box(side*.276,.473,-.237,.072,.818,.056,edge,false,torso);strap.rotation.z=side*.10;
    shaped(roundedGear,packCloth,torso,side*.33,.426,.412,.13,.45,.30);
    box(side*.219,.522,.722,.038,.554,.021,straps,false,torso);
    box(side*.22,.685,.738,.067,.075,.024,metal,false,torso);
@@ -612,44 +726,48 @@ function createSurvivor(kind){
  group.userData={limbs,head,torso};
  return group;
 }
+const infectedGlow=new THREE.MeshStandardMaterial({color:0x69794b,emissive:0x40612b,emissiveIntensity:.33,roughness:.85});
 function humanoid(kind){
  if(kind==="player"||Object.hasOwn(civilianOutfits,kind))return createSurvivor(kind);
  const group=new THREE.Group();
  const skin=infectedSkin;
  const fabric=infectedFabric[kind]??infectedFabric.walker;
  const pants=mat(0x48473f);
- const torso=mesh(jacketTorsoGeometry,fabric.clone(),0,1.61,0,group);torso.castShadow=true;
- box(0,1.11,0,.72,.18,.43,pants,false,group);
- const head=sphere(0,2.42,-.01,.33,skin,group);head.scale.set(.27,.363,.277);
- box(0,2.36,-.286,.071,.13,.11,skin,false,group);
- const hair=sphere(0,2.70,.0,.32,mat(0x42483e),group);hair.scale.set(.27,.12,.245);
- for(let side of [-1,1]){sphere(side*.13,2.46,-.29,.036,mat(0x1d2220),group);}
+ const torso=mesh(jacketShape,fabric.clone(),0,1.07,0,group);
+ torso.scale.set(kind==="brute"?.53:.424,1,.24);torso.castShadow=true;
+ humanFeature(roundedGear,pants,group,0,1.075,0,.64,.28,.41);
+ humanFeature(neckShape,skin,group,0,2.0,-.025,.113,.96,.108);
+ const head=new THREE.Group();head.position.set(0,2.36,-.062);group.add(head);
+ sculptHead(head,kind,skin,true);
+ const hair=humanFeature(survivorHairShape,mat(0x44433c),head,0,.042,.056,.222,.296,.207);
+ hair.rotation.x=-.29;
  const limbs=[];
- for(let s of [-1,1]){
-  const arm=new THREE.Group();arm.position.set(s*.55,2.03,0);group.add(arm);
-  const a=mesh(sleeveGeometry,fabric,0,-.38,0,arm);a.castShadow=true;a.rotation.z=s*.10;
-  sphere(0,-.80,-.01,.15,skin,arm);limbs.push(arm);
-  const leg=new THREE.Group();leg.position.set(s*.23,1.05,0);group.add(leg);
-  const thigh=mesh(trouserGeometry,pants,0,-.40,0,leg);thigh.castShadow=true;
-  box(0,-.89,-.10,.37,.20,.55,dark,false,leg);limbs.push(leg);
+ for(const side of [-1,1]){
+  const arm=new THREE.Group();arm.position.set(side*.453,1.92,0);group.add(arm);
+  const sleeve=humanFeature(sleeveShape,fabric,arm,side*.07,-.747,0,.15,.96,.135);
+  sleeve.rotation.z=side*.11;
+  humanFeature(unitSphere,skin,arm,side*.09,-.835,-.02,.069,.126,.061);limbs.push(arm);
+  const leg=new THREE.Group();leg.position.set(side*.176,1.09,0);group.add(leg);
+  humanFeature(trouserShape,pants,leg,0,-.91,0,.176,1,.159);
+  humanFeature(roundedGear,dark,leg,0,-.967,-.07,.252,.206,.39);
+  limbs.push(leg);
  }
  if(kind==="brute"){
   group.scale.set(1.32,1.27,1.24);torso.scale.x*=1.35;head.scale.x*=1.12;
-  const bulk=mat(0x655e54);
-  for(const side of [-1,1]){sphere(side*.62,2.02,.02,.38,bulk,group);box(side*.60,1.63,.20,.20,.48,.20,bulk,false,group);}
+  for(const side of [-1,1])humanFeature(unitSphere,fabric,group,side*.55,1.96,.015,.205,.226,.171);
  }
  if(kind==="runner"){
   torso.rotation.x=-.30;head.position.z=-.20;group.scale.set(.91,1,.92);
   limbs[0].rotation.z=.25;limbs[2].rotation.z=-.30;
-  box(-.38,1.69,-.30,.25,.40,.08,mat(0x745751),false,group);
+
  }
  if(kind==="spitter"){
-  const glow=mat(0x6b9d43);glow.emissive=new THREE.Color(0x3a9e22);glow.emissiveIntensity=.85;
-  box(0,1.65,-.31,.39,.48,.11,glow,false,group);
+  const glow=infectedGlow;
+  humanFeature(unitSphere,glow,group,0,1.65,-.215,.179,.23,.101);
   for(const side of [-1,1]){sphere(side*.42,1.35,-.28,.21,glow,group);}
   sphere(0,2.02,-.29,.18,glow,group);
  }
- box(0,1.57,-.29,.45,.22,.03,mat(0x482c2a),false,group);
+
  group.userData={limbs,head,torso};
  return group;
 }
@@ -997,7 +1115,7 @@ function currentMetrics(){
  geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
  pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,
  pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
- quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.10"};
+ quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.11"};
 }
 function updatePerfReadout(){
  if($("perf-panel").hidden)return;
@@ -1012,7 +1130,7 @@ function exportPerformanceReport(){
   metrics:currentMetrics(),framesMs:[...qaFrameMs]};
  const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob);
- const link=document.createElement("a");link.href=url;link.download="ashford-v010-performance.json";
+ const link=document.createElement("a");link.href=url;link.download="ashford-v011-performance.json";
  document.body.appendChild(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1500);
  toast("LOCAL PERFORMANCE REPORT SAVED");
@@ -1163,11 +1281,11 @@ function installLocalQA(){
    spawnEnemy(type,0,range,true);enemies.at(-1).cd=.4;
   },
   teleport(x,z){if(!Number.isFinite(x)||!Number.isFinite(z))throw new Error("Invalid QA location");state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);playerVisual.position.set(state.x,0,state.z);},
-  referenceView(x,z,yaw=0,stage=6){
-   if(![x,z,yaw].every(Number.isFinite)||!Number.isInteger(stage)||stage<0||stage>=stages.length)throw Error("Invalid local screenshot view");
+  referenceView(x,z,yaw=0,stage=6,facing=yaw){
+   if(![x,z,yaw,facing].every(Number.isFinite)||!Number.isInteger(stage)||stage<0||stage>=stages.length)throw Error("Invalid local screenshot view");
    if(state.stage===7)throw Error("Do not reposition during clinic defense");
-   state.stage=stage;state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);state.angle=yaw;cameraYaw=yaw;
-   playerVisual.position.set(state.x,0,state.z);playerVisual.rotation.y=yaw;
+   state.stage=stage;state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);state.angle=facing;cameraYaw=yaw;
+   playerVisual.position.set(state.x,0,state.z);playerVisual.rotation.y=facing;
    refreshObjective();setMarker();updateLightBudget();updateCamera(1);
   },
   finishWave(){if(state.stage!==7)throw new Error("Clinic assault is not active");

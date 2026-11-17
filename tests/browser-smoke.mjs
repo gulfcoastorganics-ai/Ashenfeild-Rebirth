@@ -28,7 +28,7 @@ try{
  page.on("requestfailed",req=>consoleErrors.push("NETWORK: "+req.url()+" "+req.failure()?.errorText));
  await page.goto("http://127.0.0.1:"+port+"/",{waitUntil:"domcontentloaded"});
  try{
-  await page.locator("#loader.hide").waitFor({timeout:45000});
+  await page.locator("#loader").waitFor({state:"detached",timeout:45000});
   report("WebGL engine initialized","PASS");
  }catch(e){
   report("WebGL engine initialized","FAIL",(await page.locator("#loader").innerText().catch(()=>"Missing loader")).slice(0,180));
@@ -89,7 +89,7 @@ try{
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem("ashfordRebirthV01")||"null"));
  assert(saved&&typeof saved.stage==="number","No checkpoint saved when opening pause");
  await page.reload({waitUntil:"domcontentloaded"});
- await page.locator("#loader.hide").waitFor({timeout:45000});
+ await page.locator("#loader").waitFor({state:"detached",timeout:45000});
  await page.locator("#start-button").click();
  assert(await page.locator("#hud").isVisible(),"Reloaded game failed to start");
  await assertGraphics("performance",.85);
