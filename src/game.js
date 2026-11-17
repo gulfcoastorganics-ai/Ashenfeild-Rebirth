@@ -1,6 +1,7 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
 import {isBlocked as isBlocked2D,lineBlocked as hasCover,chaseGoal as chooseChaseGoal,findPath as findRoute,restoreCheckpoint} from "./nav.mjs";
 import {WEAPONS,INFECTED,chooseTarget,applyHit,chooseInfectedAction,attackStillValid} from "./combat.mjs";
+import {DODGE,canDodge,normalize2D,summarizeFrames} from "./survival.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -33,7 +34,7 @@ const state={
  started:false,paused:true,ended:false,stage:0,health:100,stamina:100,thirst:80,hunger:80,
  ammo:0,mag:12,hasGun:false,supplies:0,kills:0,waveKills:0,waveStarted:false,waveTimer:0,
  x:-48,z:-24,angle:Math.PI,weapon:"crowbar",inventory:{water:1,food:2,bandage:1},
- time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0,hitConfirm:0,cameraKick:0,meleeAnim:0,pistolAnim:0
+ time:0,attackTime:0,shootTime:0,hitTime:0,lastSave:0,hitConfirm:0,cameraKick:0,meleeAnim:0,pistolAnim:0,dodgeTime:0,dodgeCooldown:0,dodgeIFrames:0,dodgeDir:{x:0,z:0}
 };
 const stages=[
  {title:"Exit the barricaded house",desc:"Make your way outside. The street is quiet—too quiet.",point:{x:-47,z:-11},kind:"arrive",radius:2.4},
@@ -368,11 +369,23 @@ function startWave(){state.waveStarted=true;state.waveKills=0;state.waveTimer=0;
  toast("CLINIC UNDER ATTACK");}
 function victory(){state.ended=true;state.paused=true;$("end-label").textContent="OPENING ROUTE CLEARED";$("end-title").textContent="FIRST NIGHT SURVIVED.";$("end-message").textContent="You reached the ward, found allies, and secured Ashford Clinic. This is the end of the reconstruction opening slice.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(680,.6);}
 function gameOver(){state.ended=true;state.paused=true;$("end-label").textContent="SIGNAL LOST";$("end-title").textContent="YOU DID NOT SURVIVE.";$("end-message").textContent="The dead claimed another survivor. Return to the start and try again.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(125,.6,"sawtooth",.08);}
-function takeDamage(amount){if(state.qaNoDamage||state.hitTime>.05)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
+function takeDamage(amount){if(state.qaNoDamage||state.hitTime>.05||state.dodgeIFrames>0)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;tone(120,.22,"sawtooth",.09);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
 function confirmHit(killed=false){
  state.hitConfirm=killed?.38:.22;
  const marker=$("crosshair");marker.classList.remove("hit","kill");void marker.offsetWidth;
  marker.classList.add(killed?"kill":"hit");
+}
+function dodge(){
+ if(!state.started||state.paused||state.ended)return;
+ if(!canDodge(state.stamina,state.dodgeCooldown,state.dodgeTime>0)){tone(160,.08);return;}
+ const forward={x:-Math.sin(cameraYaw),z:-Math.cos(cameraYaw)};
+ const right={x:Math.cos(cameraYaw),z:-Math.sin(cameraYaw)};
+ const mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
+ const mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
+ const v=normalize2D(right.x*mx+forward.x*mz,right.z*mx+forward.z*mz,{x:-forward.x,z:-forward.z});
+ state.stamina-=DODGE.cost;state.dodgeTime=DODGE.duration;state.dodgeCooldown=DODGE.cooldown;
+ state.dodgeIFrames=DODGE.invulnerability;state.dodgeDir=v;state.meleeAnim=0;
+ toast("DODGE");tone(280,.10,"triangle",.055);
 }
 function melee(){
  if(state.attackTime>0||!state.started||state.paused)return;
@@ -516,20 +529,31 @@ function updatePlayer(dt){
  const len=Math.hypot(mx,mz);if(len>1){mx/=len;mz/=len;}
  const moving=Math.hypot(mx,mz)>.06;
  const sprint=(keys.ShiftLeft||keys.ShiftRight||touch.sprint)&&state.stamina>2&&moving;
- const speed=(sprint?7.15:4.25)*dt;
  const forward=V(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw)),right=V(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));
- const dx=(forward.x*mz+right.x*mx)*speed,dz=(forward.z*mz+right.z*mx)*speed;
- if(moving){
- if(!blocked(state.x+dx,state.z,.35))state.x+=dx;
- if(!blocked(state.x,state.z+dz,.35))state.z+=dz;
- state.angle=Math.atan2(-dx,-dz);
+ let dx=0,dz=0;
+ const rolling=state.dodgeTime>0;
+ if(rolling){
+  dx=state.dodgeDir.x*DODGE.speed*dt;dz=state.dodgeDir.z*DODGE.speed*dt;
+ }else{
+  const speed=(sprint?7.15:4.25)*dt;
+  dx=(forward.x*mz+right.x*mx)*speed;dz=(forward.z*mz+right.z*mx)*speed;
  }
- if(sprint)state.stamina=clamp(state.stamina-dt*18,0,100);else state.stamina=clamp(state.stamina+dt*13,0,100);
+ if(rolling||moving){
+  if(!blocked(state.x+dx,state.z,.35))state.x+=dx;
+  if(!blocked(state.x,state.z+dz,.35))state.z+=dz;
+  if(!rolling&&moving)state.angle=Math.atan2(-dx,-dz);
+ }
+ if(!rolling&&sprint)state.stamina=clamp(state.stamina-dt*18,0,100);
+ else state.stamina=clamp(state.stamina+dt*13,0,100);
+ state.dodgeTime=Math.max(0,state.dodgeTime-dt);
+ state.dodgeCooldown=Math.max(0,state.dodgeCooldown-dt);
+ state.dodgeIFrames=Math.max(0,state.dodgeIFrames-dt);
  state.thirst=clamp(state.thirst-dt*.026,0,100);state.hunger=clamp(state.hunger-dt*.012,0,100);
  if(state.thirst<3||state.hunger<3)state.health=clamp(state.health-dt*.8,0,100);
  playerVisual.position.set(state.x,Math.sin(state.time*(sprint?13:8))*(moving?.065:.016),state.z);
  playerVisual.rotation.y=state.angle;animateLimbs(playerVisual,moving?Math.sin(state.time*(sprint?13:8))*(sprint?1.1:.72):.02);
  poseSurvivor(moving,sprint);
+ if(rolling){playerVisual.userData.torso.rotation.z=.32*Math.sin((1-state.dodgeTime/DODGE.duration)*Math.PI);}
  state.attackTime=Math.max(0,state.attackTime-dt);state.shootTime=Math.max(0,state.shootTime-dt);state.hitTime=Math.max(0,state.hitTime-dt);
  state.meleeAnim=Math.max(0,state.meleeAnim-dt);state.pistolAnim=Math.max(0,state.pistolAnim-dt);
  state.cameraKick=Math.max(0,state.cameraKick-dt*.85);state.hitConfirm=Math.max(0,state.hitConfirm-dt);
@@ -553,6 +577,7 @@ function hud(){
  $("th-num").textContent=Math.ceil(state.thirst)+"%";$("hu-num").textContent=Math.ceil(state.hunger)+"%";
  $("weapon-name").textContent=state.hasGun?"PISTOL + CROWBAR":"CROWBAR";
  $("ammo").textContent=state.hasGun?state.ammo+" ROUNDS":"MELEE";
+ $("dodge-status").textContent=state.dodgeCooldown>0?"ROLL "+state.dodgeCooldown.toFixed(1)+"s":"ROLL READY";
  const q=stages[state.stage];$("waypoint-distance").textContent=Math.round(dist(pos(),q.point))+" m";
  $("danger-text").textContent=state.stage===7?"INFECTED ASSAULT · "+state.waveKills+"/4":"AIRBORNE CONTAMINATION";
  if(q.kind==="interact"&&dist(pos(),q.point)<4){$("context").hidden=false;$("context-label").textContent="PRESS E · "+q.name;}else $("context").hidden=true;
@@ -639,13 +664,13 @@ function controls(){
  try{qualityMode=localStorage.getItem("ashfordGraphicsV02")||"auto";}catch(e){}
  applyQuality(qualityMode);
  $("close-pack").onclick=()=>{closeAll();state.paused=false;};
- $("mobile-interact").onclick=interact;$("mobile-attack").onclick=melee;$("mobile-fire").onclick=shoot;
+ $("mobile-interact").onclick=interact;$("mobile-attack").onclick=melee;$("mobile-fire").onclick=shoot;$("mobile-dodge").onclick=dodge;
  for(const evt of ["pointerdown","pointerup","pointercancel"])$("mobile-sprint").addEventListener(evt,e=>{e.preventDefault();touch.sprint=evt==="pointerdown";});
  addEventListener("keydown",e=>{keys[e.code]=true;if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code))e.preventDefault();
  if(e.repeat)return;
  if(e.code==="Escape"){if($("pack-modal").classList.contains("visible")){resume();return;}if(activeDialog)return;pause();}
  if(e.code==="KeyI"){if($("pack-modal").classList.contains("visible"))resume();else showPack();}
- if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="Space")melee();
+ if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="KeyX")dodge();if(e.code==="Space")melee();
  });
  addEventListener("keyup",e=>{keys[e.code]=false;});
  addEventListener("blur",()=>{for(const k in keys)keys[k]=false;touch.x=0;touch.y=0;touch.sprint=false;});
