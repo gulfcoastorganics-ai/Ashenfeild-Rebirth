@@ -4,6 +4,21 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.11 — Realism pass across the opening route
+
+The survivor and infected use sculpted facial meshes with cheek, brow and jaw
+shaping. Clothing has softer colors, and the infected retain their distinct
+silhouettes and combat behavior. The safehouse has scuffed floorboards, roof
+beams, improvised bedding and a framed exit. Textured sidewalks and a row of
+buildings give the street depth. The market uses open shelving with canned and
+boxed stock, the patrol sedan has a shaped body and sloped glass, and the
+clinic beds use mattress, rail and wheel geometry.
+
+All new art is built from local code with shared geometry and seeded textures.
+Run \`npm run test:reference\` for the clinic, market and a 602×560 survivor
+view inside the safehouse. Software-rendered checks track rendering cost.
+Use the in-game diagnostics for measurements on a Chromebook or phone.
+
 ## V0.10 — Screenshot-led visual overhaul
 
 The closer shoulder camera keeps the field kit in frame while leaving a view down
