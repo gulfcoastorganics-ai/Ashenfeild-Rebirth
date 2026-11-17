@@ -572,10 +572,10 @@ function makeCar(x,z,color,police=false){
 }
 function plaidTexture(){
  const c=document.createElement("canvas");c.width=c.height=512;
- const ctx=c.getContext("2d");ctx.fillStyle="#171a1a";ctx.fillRect(0,0,512,512);
+ const ctx=c.getContext("2d");ctx.fillStyle="#533434";ctx.fillRect(0,0,512,512);
  // Screenshot reference: bright red, dense charcoal plaid with narrow dark seams.
  for(let k=0;k<512;k+=128){
-  ctx.fillStyle="#733132";ctx.fillRect(k+4,0,63,512);ctx.fillRect(0,k+5,512,63);
+  ctx.fillStyle="rgba(130,48,47,.57)";ctx.fillRect(k+4,0,63,512);ctx.fillRect(0,k+5,512,63);
   ctx.fillStyle="rgba(154,66,58,.56)";ctx.fillRect(k+18,0,9,512);ctx.fillRect(0,k+19,512,9);
   ctx.fillStyle="rgba(23,26,27,.8)";ctx.fillRect(k+68,0,14,512);ctx.fillRect(0,k+68,512,14);
  }
@@ -613,7 +613,7 @@ const faceMaterials={
  player:faceMaterial(0xb28970),mara:faceMaterial(0x9f745c),vale:faceMaterial(0xb38d76),guard:faceMaterial(0xa2836b),
  walker:faceMaterial(0x81867b),runner:faceMaterial(0x8d8876),brute:faceMaterial(0x817b6f),spitter:faceMaterial(0x88927b)
 };
-const lids=mat(0x584235),sclera=mat(0xaea797,.61),iris=mat(0x35302a,.52),lips=mat(0x805a51);
+const lids=mat(0x534136),sclera=mat(0x8d8374,.61),iris=mat(0x362d25,.52),lips=mat(0x75564c);
 function humanFeature(geometry,material,parent,x,y,z,sx,sy,sz,castsShadow=true){
  const part=mesh(geometry,material,x,y,z,parent);
  part.scale.set(sx,sy,sz);part.castShadow=castsShadow;
@@ -627,12 +627,12 @@ function sculptHead(head,kind,skin,infected){
  for(const side of [-1,1]){
   const x=side*.083*scale;
   humanFeature(canopyGeometry,skin,head,side*.212*scale,-.041,.007,.039,.070,.037);
-  const brow=humanFeature(canopyGeometry,lids,head,x,.071,-.224*scale,.054,.018,.019,false);
+  const brow=humanFeature(canopyGeometry,lids,head,x,.071,-.224*scale,.050,.015,.016,false);
   brow.rotation.z=side*.12;
-  humanFeature(canopyGeometry,infected?mat(0x929282):sclera,head,x,.034,-.229*scale,.041,.017,.019,false);
+  humanFeature(canopyGeometry,infected?mat(0x929282):sclera,head,x,.034,-.228*scale,.039,.015,.018,false);
   if(!infected)humanFeature(canopyGeometry,iris,head,x,.035,-.246*scale,.013,.014,.008,false);
  }
- humanFeature(canopyGeometry,infected?mat(0x514940):lips,head,0,-.117,-.229*scale,.063,.012,.019,false);
+ humanFeature(canopyGeometry,infected?mat(0x514940):lips,head,0,-.125,-.247*scale,.064,.011,.017,false);
 }
 const survivorHairShape=new THREE.SphereGeometry(1,14,9,0,Math.PI*2,0,Math.PI*.58);
 const roundedGear=(()=>{
@@ -695,6 +695,8 @@ function createSurvivor(kind){
   limbs.push(leg);
  }
  if(kind==="player"){
+  box(0,.489,-.244,.037,.833,.028,mat(0x42322d),false,torso);
+  for(const y of [.194,.365,.539,.717])box(.009,y,-.263,.031,.027,.011,metal,false,torso);
   shaped(roundedGear,packCloth,torso,0,.52,.402,.665,.96,.425);
   shaped(roundedGear,edge,torso,0,.489,.623,.533,.655,.082);
   shaped(roundedGear,packCloth,torso,0,.423,.682,.482,.485,.095);
