@@ -4,6 +4,26 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.7 — Visual Fidelity & GPU Optimization
+
+V0.7 improves the **independent reconstruction**, not the inaccessible original Sites source.
+
+**Visual pass:** Last Stop Market, Ashford Clinic and the safehouse now use differentiated, weathered procedural wall/floor textures. The four infected archetypes reuse distinct worn-fabric maps and mottled skin; their original rigs, silhouettes and animation pivots remain intact.
+
+**GPU/resource pass:** Common opaque PBR materials are cached, sphere/cylinder geometry is reused, and repetitive shelves, products, puddles, road markings, debris, storefront grime and tree foliage are rendered as grouped instances. Distant point lights outside their attenuation radius are disabled. Transient combat effects keep disposable geometry separate from shared assets.
+
+**QA:** The new `npm run test:visual` captures safehouse, market, patrol and clinic screenshots while checking draw calls, GPU geometry counts and triangles in Chromium. The existing normal-rules campaign, WebGL, route, mobile and combat tests remain mandatory.
+
+```bash
+npm install
+npx playwright install chromium
+npm run check
+npm run test:visual
+npm run test:campaign
+```
+
+For a **real Chromebook comparison**, play the game locally, press **P**, choose **SAVE REPORT**, and compare Default versus Graphics: Performance. GitHub Actions uses SwiftShader software rendering, *not a Chromebook or smartphone GPU*. See [VISUAL-QA.md](VISUAL-QA.md).
+
 ## V0.6 — Normal-rule survival and local profiling
 
 This phase is still an **independent reconstruction**, not recovered Sites v7.1 code.
