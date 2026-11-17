@@ -58,7 +58,7 @@ const stages=[
  {title:"Secure the clinic entrance",desc:"Return to the front doors and secure the clinic gate.",point:{x:44,z:-15},kind:"interact",name:"CLINIC GATE"}
 ];
 const keys={},touch={x:0,y:0,sprint:false};
-let cameraYaw=Math.PI,cameraPitch=.43,lastPointer=null,activeDialog=false;
+let cameraYaw=Math.PI,cameraPitch=.39,lastPointer=null,activeDialog=false;
 let qualityMode="auto";
 const solidMeshes=[];
 const cameraRay=new THREE.Raycaster();
@@ -221,7 +221,7 @@ function makeWorld(){
  // Safehouse
  house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:wornSurface(0x505452,121),theme:"safehouse"});
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
- const safeLamp=box(-48,4.42,-25,2.5,.17,.52,matUnique(0xf3d7a3));
+ const safeLamp=box(-49,4.73,-32,1.9,.13,.38,matUnique(0xf3d7a3));
  safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
  addLight(-48,3.7,-24,0xffd1a0,7,20);
  box(-54,.62,-30,3,1.2,2,dark,true);box(-40,.6,-32,1.8,1.1,1.6,mat(0x6a5844));
@@ -263,7 +263,7 @@ function makeWorld(){
  box(-7,.5,-29,1.3,1,1.3,mat(0x6b6049));box(-7,1.03,-29,1.35,.11,1.35,mat(0xa28a5b));
  addLight(-15,4.15,-27,0xffb16d,9,23);
  addLight(-5,4,-21,0xb77d44,4,15);
- for(let z of [-20,-33]){const fixture=box(-11,4.45,z,3,.18,.4,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
+ for(let z of [-27,-34]){const fixture=box(-11,4.70,z,2.35,.14,.31,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
  house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:wornSurface(0x768080,331),theme:"clinic"});
  const clinicSign=label("ASHFORD CLINIC",20,2.15,"#253b43","#b8dce0",75);clinicSign.position.set(45,4.4,-12.65);world.add(clinicSign);
@@ -326,8 +326,8 @@ function makeWorld(){
  for(const x of [36,54]){box(x,1.45,-32.0,.10,1.3,.10,medTrim);
    cyl(x,2.15,-32,.24,.11,medTrim);}
  // privacy curtains near medical beds
- for(let x of [36,54]){const curtain=box(x,2.7,-31,.07,2.65,5,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
- for(let x of [38,48]){for(let z of [-34,-19]){const fixture=box(x,4.45,z,4,.16,.64,matUnique(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
+ for(let x of [32,58]){const curtain=box(x,2.55,-34,.065,2.0,2.3,mat(0x778c85,.95));curtain.material.side=THREE.DoubleSide;}
+ for(let x of [38,48]){for(let z of [-34,-27]){const fixture=box(x,4.74,z,2.8,.13,.43,matUnique(0xc5d6ca));fixture.material.emissive=new THREE.Color(0x9ac1c1);fixture.material.emissiveIntensity=.7;}}
  addLight(44,4,-24,0xaddde2,6,22);addLight(54,3.8,-32,0xa7def0,4,15);
  const ward=label("WARD B   /   TRIAGE",10,1.1,"#37565d","#e1e6df",48);ward.position.set(46,2.7,-38.52);world.add(ward);
  // Patrol car, street debris and reflective safety cones form a readable landmark.
@@ -405,8 +405,9 @@ function humanoid(kind="player"){
  const pants=mat(zombie?0x48473f:kind==="vale"?0xa9aaa0:kind==="player"?0x554539:kind==="guard"?0x2f5265:0x39444a);
  const torso=mesh(jacketTorsoGeometry,zombie?fabric.clone():fabric,0,1.61,0,group);torso.castShadow=true;
  box(0,1.11,0,.72,.18,.43,pants,false,group);
- const head=sphere(0,2.42,-.01,.33,skin,group);
- const hair=sphere(0,2.69,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.29,.13,.28);
+ const head=sphere(0,2.42,-.01,.33,skin,group);head.scale.set(.82,1.10,.84);
+ box(0,2.36,-.286,.071,.13,.11,skin,false,group);
+ const hair=sphere(0,2.70,.0,.32,mat(zombie?0x42483e:0x302d29),group);hair.scale.set(.27,.12,.245);
  for(let side of [-1,1]){sphere(side*.13,2.46,-.29,.036,mat(0x1d2220),group);}
  const limbs=[];
  for(let s of [-1,1]){
@@ -728,7 +729,7 @@ function hud(){
  $("hp-num").textContent=Math.ceil(state.health)+" / 100";$("st-num").textContent=Math.ceil(state.stamina)+" / 100";
  $("th-num").textContent=Math.ceil(state.thirst)+"%";$("hu-num").textContent=Math.ceil(state.hunger)+"%";
  $("weapon-name").textContent=state.hasGun?"PISTOL + CROWBAR":"CROWBAR";
- $("weapon-card-label").textContent=state.hasGun?"SERVICE PISTOL":"UNARMED";
+ $("weapon-card-label").textContent=state.hasGun?"SERVICE PISTOL":"CROWBAR";
  $("weapon-card-ammo").textContent=state.hasGun?state.ammo+" ROUNDS":"MELEE READY";
  $("ammo").textContent=state.hasGun?state.ammo+" ROUNDS":"MELEE";
  $("dodge-status").textContent=state.dodgeCooldown>0?"ROLL "+state.dodgeCooldown.toFixed(1)+"s":"ROLL READY";
@@ -755,8 +756,8 @@ function drawMap(){
  ctx.strokeStyle="#778984";ctx.lineWidth=2;ctx.strokeRect(1,1,w-2,h-2);
 }
 function updateCamera(dt){
- const horizontal=Math.cos(cameraPitch)*8.7,vertical=Math.sin(cameraPitch)*8.7+state.cameraKick*.85;
- const pivot=V(state.x,1.65,state.z);
+ const horizontal=Math.cos(cameraPitch)*7.5,vertical=Math.sin(cameraPitch)*7.5+state.cameraKick*.85;
+ const pivot=V(state.x,2.2,state.z);
  const desired=V(state.x+Math.sin(cameraYaw)*horizontal,vertical+1.65,state.z+Math.cos(cameraYaw)*horizontal);
  const delta=desired.clone().sub(pivot),maxDist=delta.length(),dir=delta.normalize();
  cameraRay.set(pivot,dir);cameraRay.near=.2;cameraRay.far=maxDist;
