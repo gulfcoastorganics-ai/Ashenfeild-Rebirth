@@ -904,6 +904,13 @@ function installLocalQA(){
    spawnEnemy(type,0,range,true);enemies.at(-1).cd=.4;
   },
   teleport(x,z){if(!Number.isFinite(x)||!Number.isFinite(z))throw new Error("Invalid QA location");state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);playerVisual.position.set(state.x,0,state.z);},
+  referenceView(x,z,yaw=0){
+   if(![x,z,yaw].every(Number.isFinite))throw Error("Invalid local screenshot view");
+   if(state.stage===7)throw Error("Do not reposition during clinic defense");
+   state.x=clamp(x,-73,73);state.z=clamp(z,-54,43);state.angle=yaw;cameraYaw=yaw;
+   playerVisual.position.set(state.x,0,state.z);playerVisual.rotation.y=yaw;
+   updateLightBudget();updateCamera(1);
+  },
   finishWave(){if(state.stage!==7)throw new Error("Clinic assault is not active");
    for(const enemy of [...enemies].filter(e=>e.ambush&&!e.dead).slice(0,4)){hurtEnemy(enemy,enemy.hp+1);}
   }
