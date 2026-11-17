@@ -16,15 +16,15 @@
 <div class="hud" id="hud" hidden>
  <header class="topbar">
   <div class="brand"><small>ASHFORD COUNTY / OUTBREAK +07</small><strong>DEAD ZONE <b>:</b> AFTERMATH</strong></div>
-  <div class="topbuttons"><span class="build">RECONSTRUCTION · v0.5</span><button id="perf-button" title="Performance metrics (P)">FPS <kbd>P</kbd></button><button id="inventory-button" title="Inventory (I)">PACK <kbd>I</kbd></button><button id="pause-button" title="Pause (Esc)">Ⅱ</button></div>
+  <div class="topbuttons"><span class="build">RECONSTRUCTION · v0.6</span><button id="perf-button" title="Performance metrics (P)">FPS <kbd>P</kbd></button><button id="inventory-button" title="Inventory (I)">PACK <kbd>I</kbd></button><button id="pause-button" title="Pause (Esc)">Ⅱ</button></div>
  </header>
- <section id="perf-panel" class="perf-panel" hidden aria-live="off"><div class="eyebrow">RENDER DIAGNOSTICS</div><div id="perf-numbers">Collecting frames…</div><small>Local device estimates · not GPU profiler</small></section>
+ <section id="perf-panel" class="perf-panel" hidden aria-live="off"><div class="eyebrow">RENDER DIAGNOSTICS</div><div id="perf-numbers">Collecting frames…</div><small>Local browser frame samples · not GPU profiler</small><button id="export-perf" class="perf-export" type="button">SAVE REPORT</button></section>
  <section class="leftpanel">
   <div class="stat"><div class="stat-title"><span>HEALTH</span><span id="hp-num">100 / 100</span></div><div class="track"><div id="hp-bar" class="fill health"></div></div></div>
   <div class="stat"><div class="stat-title"><span>STAMINA</span><span id="st-num">100 / 100</span></div><div class="track"><div id="st-bar" class="fill stamina"></div></div></div>
   <div class="stat minor"><div class="stat-title"><span>THIRST</span><span id="th-num">80%</span></div><div class="track"><div id="th-bar" class="fill thirst"></div></div></div>
   <div class="stat minor"><div class="stat-title"><span>HUNGER</span><span id="hu-num">80%</span></div><div class="track"><div id="hu-bar" class="fill hunger"></div></div></div>
-  <div class="loadout"><span id="weapon-name">CROWBAR</span><span id="ammo">MELEE</span><span id="supply-count">SUPPLIES 0/1</span></div>
+  <div class="loadout"><span id="weapon-name">CROWBAR</span><span id="ammo">MELEE</span><span id="supply-count">SUPPLIES 0/1</span><span id="dodge-status">ROLL READY</span></div>
  </section>
  <section class="missionpanel">
   <div class="eyebrow"><span class="signal"></span> ACTIVE OBJECTIVE <span id="objective-number">01 / 09</span></div>
@@ -35,11 +35,11 @@
  <section class="minimap-panel"><canvas id="minimap" width="180" height="180" aria-label="Area minimap"></canvas><span>ASHFORD / ROUTE 01</span></section>
  <section id="context" class="context" hidden><span id="context-label">PRESS E TO INTERACT</span></section>
  <section id="notification" class="notification" aria-live="polite"></section>
- <section class="bottomhud"><div class="hint">WASD MOVE <i>·</i> SHIFT SPRINT <i>·</i> DRAG LOOK <i>·</i> E INTERACT <i>·</i> CLICK / SPACE ATTACK <i>·</i> F FIRE</div><div class="survivors"><span class="signal"></span><span id="danger-text">AIRBORNE CONTAMINATION</span></div></section>
+ <section class="bottomhud"><div class="hint">WASD MOVE <i>·</i> SHIFT SPRINT <i>·</i> DRAG LOOK <i>·</i> X DODGE <i>·</i> E INTERACT <i>·</i> CLICK / SPACE ATTACK <i>·</i> F FIRE</div><div class="survivors"><span class="signal"></span><span id="danger-text">AIRBORNE CONTAMINATION</span></div></section>
 </div>
 <div id="mobile-controls" hidden>
  <div id="joystick"><div class="stick"></div></div>
- <div id="mobile-actions"><button id="mobile-interact">USE</button><button id="mobile-fire">FIRE</button><button id="mobile-attack">HIT</button><button id="mobile-sprint">RUN</button></div>
+ <div id="mobile-actions"><button id="mobile-interact">USE</button><button id="mobile-fire">FIRE</button><button id="mobile-attack">HIT</button><button id="mobile-sprint">RUN</button><button id="mobile-dodge">DODGE</button></div>
 </div>
 <div class="modal visible" id="intro">
  <div class="intro-backdrop"></div>

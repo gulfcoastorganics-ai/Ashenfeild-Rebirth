@@ -4,6 +4,23 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.6 — Normal-rule survival and local profiling
+
+This phase is still an **independent reconstruction**, not recovered Sites v7.1 code.
+
+- **X / DODGE** triggers a stamina-costing evasive roll with collision checks, a short damage-avoidance window and cooldown. The mobile HUD shows **DODGE**.
+- **Q / R** turn the camera left/right on keyboard, allowing combat aiming without a mouse drag.
+- The FPS overlay (**P** or **FPS**) now includes **SAVE REPORT**, which downloads `ashford-v06-performance.json` containing local browser FPS, p50/p95 frame time, draw calls, triangles, geometries, pixel ratio, viewport and frame samples. No remote data upload.
+- New `src/survival.mjs` keeps dodge and frame statistics deterministic and covered by unit tests.
+- `npm run test:campaign` scripts a **normal-rules** opening route using physical keyboard controls, bandage use, aiming, real pistol/melee hits and dodging. It does **not** teleport, enable invulnerability, spawn staged enemies or trigger the test-only kill helper. It uses read-only localhost QA coordinates to guide its keyboard actions; this is not a human playthrough.
+- Existing WebGL, route, mobile and controlled-combat regression checks remain intact.
+
+### Collect a real Chromebook performance report
+
+Run the game locally using the instructions below. Once playing, press **P**, choose **SAVE REPORT**, and save the JSON file. Repeat in **Graphics: Performance** mode (Pause menu) for a comparison. The browser cannot report GPU FPS from GitHub's headless SwiftShader tests, so profiling on the actual Chromebook remains essential.
+
+**Current deployment note:** GitHub Pages is not verified live. Do not treat the recovery placeholder `main` as a game deployment.
+
 ## V0.5 — Combat & Character Fidelity
 
 This is the **independent reconstruction branch**, not original Sites v7.1 source.
