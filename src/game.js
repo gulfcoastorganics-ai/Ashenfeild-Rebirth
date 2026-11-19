@@ -4,6 +4,7 @@ import {WEAPONS,INFECTED,ATTACK_RANGE,SPIT_RANGE,chooseTarget,applyHit,chooseInf
 import {DODGE,canDodge,normalize2D,summarizeFrames} from "./survival.mjs";
 import {carBody,faceGeometry,floorboards,masonry,sidewalkTexture} from "./art.mjs";
 import {createAudio} from "./audio.mjs";
+import {createSky,lightPool,loadMaterials} from "./lighting.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -24,8 +25,12 @@ function materialCacheHas(material){for(const item of materialCache.values()){if
 const coal=mat(0x21282a), asphalt=mat(0x292c2d), concrete=mat(0x555b57), dust=mat(0x7a7060), brick=mat(0x5f5551), panel=mat(0x6c726d), glass=mat(0x39595a,.25,.15), dark=mat(0x1b2225);
 const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,emissiveIntensity:.5,roughness:.3});
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x465153);
-scene.fog=new THREE.FogExp2(0x58605d,.014);
+const skyTexture=createSky();
+const performanceSky=new THREE.Color(0x565952);
+scene.background=skyTexture;
+scene.backgroundIntensity=.84;
+scene.fog=new THREE.FogExp2(0x746f60,.017);
+let materialTile;
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,210);
 function createRenderer(){
  try{return new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});}
@@ -45,14 +50,14 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
 renderer.setSize(innerWidth,innerHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.10;
+renderer.toneMappingExposure=1.21;
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 $("game").appendChild(renderer.domElement);
-const hemi=new THREE.HemisphereLight(0xafc0c5,0x494134,1.65);scene.add(hemi);
-const moon=new THREE.DirectionalLight(0xffdfb6,1.6);moon.position.set(-21,40,22);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0004;scene.add(moon);
+const hemi=new THREE.HemisphereLight(0xacbcc9,0x544732,1.34);scene.add(hemi);
+const moon=new THREE.DirectionalLight(0xffd8ab,1.92);moon.position.set(-34,32,42);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0003;moon.shadow.normalBias=.037;scene.add(moon);
 const world=new THREE.Group();scene.add(world);
-const obstacles=[],enemies=[],effects=[],localLights=[],streetDetails=[];
+const obstacles=[],enemies=[],effects=[],localLights=[],streetDetails=[],finishMaterials=[];
 let lightBudgetElapsed=0;
 let playerVisual,playerShadow,marker,markerRing,markerDiamond;
 const sound=createAudio();
@@ -257,9 +262,9 @@ function proceduralSurface(base,seed=1,repeatX=2,repeatY=1){
 function wornSurface(base,seed=1,x=2,y=1){return new THREE.MeshStandardMaterial({map:proceduralSurface(base,seed,x,y),roughness:.95});}
 function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safehouse"}){
  const backZ=cz-d/2,frontZ=cz+d/2,left=cx-w/2,right=cx+w/2;
- const tile=matUnique(0xffffff);
- tile.map=theme==="clinic"?referenceClinicFloor():theme==="safehouse"?floorboards(w,d):interiorFloorTexture(w,d,theme);
- tile.needsUpdate=true;
+ const hardwood=theme==="safehouse"?detailedMaterial(0,0,w/7,d/4.9,0xe3dbc7,.80,.036):null;
+ const tile=hardwood??matUnique(0xffffff);
+ if(!hardwood)tile.map=theme==="clinic"?referenceClinicFloor():theme==="safehouse"?floorboards(w,d):interiorFloorTexture(w,d,theme);
  // Lift interior finish above the base world ground to eliminate coplanar depth fighting.
  box(cx,.057,cz,w,.028,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
@@ -268,6 +273,13 @@ function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safeh
  if(doorX+frontGap/2<right)wall((right+doorX+frontGap/2)/2,frontZ,right-(doorX+frontGap/2),.7,4.9,color);
  box(cx,4.85,backZ+.35,w,.23,.35,dark);
  return {frontZ,backZ,left,right};
+}
+function detailedMaterial(column,row,repeatX,repeatY,color,roughness,relief){
+ const map=materialTile?.({column,row,repeatX,repeatY});
+ if(!map)return null;
+ const material=new THREE.MeshStandardMaterial({map,color,roughness});
+ finishMaterials.push({material,map,relief});
+ return material;
 }
 function windowPanel(x,y,z,w,h,pane=glass){box(x,y,z,w,h,.1,pane);box(x-w/2,y,z,.13,h+.2,.14,dark);box(x+w/2,y,z,.13,h+.2,.14,dark);box(x,y+h/2,z,w+.1,.13,.14,dark);box(x,y-h/2,z,w+.1,.13,.14,dark);}
 function marketWindowMaterial(){
@@ -301,7 +313,8 @@ function ceilingPanel(x,z,width,depth,tint){
  ceiling.rotation.x=Math.PI/2;
 }
 function dressSafehouse(){
- const plaster=masonry("#706c59",574,5,1),stud=mat(0x514235),timber=masonry("#654c38",588,2,1);
+ const plaster=detailedMaterial(1,0,4,1,0xa6a18c,.94,.045)??masonry("#706c59",574,5,1);
+ const stud=mat(0x534134),timber=detailedMaterial(0,0,2,1,0x9b876d,.86,.023)??masonry("#654c38",588,2,1);
  ceilingPanel(-49,-26,24.4,22.4,plaster);
  for(const z of [-33,-25,-17])box(-49,4.76,z,24.5,.24,.23,stud);
  box(-49,2.43,-37.10,24.25,4.78,.04,plaster);
@@ -327,6 +340,31 @@ function dressSafehouse(){
  }
  box(-47,4.26,-14.39,7.52,.26,.42,stud);
  for(const x of [-50.61,-43.39])box(x,2.21,-14.38,.17,4.35,.38,stud);
+ // Dress the opening sightline while keeping the full doorway walkable.
+ const blackened=mat(0x272c2b,.78),canvas=mat(0x82765a),iron=mat(0x655d4e,.55,.2);
+ box(-53.1,.86,-17.5,2.51,1.46,.92,timber);
+ box(-53.1,1.63,-17.5,2.61,.11,1.02,stud);
+ for(const x of [-53.91,-53.1,-52.29]){
+  box(x,1.05,-17.98,.712,.69,.08,timber);
+  box(x,1.23,-18.029,.19,.05,.052,iron);
+ }
+ const toolbox=box(-53.57,1.83,-17.52,.66,.27,.43,blackened);
+ toolbox.rotation.y=.14;
+ const rag=box(-52.59,1.711,-17.44,.58,.028,.39,canvas);
+ rag.rotation.y=-.17;
+ box(-41.65,.54,-18.13,2.03,1.07,1.19,timber);
+ box(-41.65,1.095,-18.13,2.12,.12,1.27,stud);
+ for(const x of [-42.09,-41.44]){
+  box(x,.63,-18.746,.075,.94,.023,iron);
+  box(x,.93,-18.767,.101,.065,.032,blackened);
+ }
+ box(-41.43,1.37,-18.29,.68,.39,.417,canvas);
+ const floorWash=mesh(new THREE.PlaneGeometry(6.45,9.7),lightPool(),-46.93,.078,-17.92);
+ floorWash.rotateX(-Math.PI/2);floorWash.rotateZ(.22);
+ floorWash.receiveShadow=false;
+ attachContactShadow(world,-53.1,-17.5,.082,3.44,1.78);
+ attachContactShadow(world,-41.65,-18.1,.083,2.87,1.82);
+
 }
 function dressStreet(){
  const masonryA=masonry("#65544a",707,4,2,true),masonryB=masonry("#6b685b",708,4,1),roof=mat(0x383d38),sill=mat(0x55483a),window=mat(0x28363a,.35,.22);
@@ -357,13 +395,15 @@ function dressStreet(){
  instancedByRegion(stains,mat(0x312e28));
 }
 function makeWorld(){
- // Single reusable 256px procedural roadway texture; detail without external assets.
- asphalt.map=gritTexture();asphalt.color.set(0xffffff);asphalt.needsUpdate=true;
+ // Use the material sheet when available and a local procedural texture as fallback.
+ const road=detailedMaterial(0,1,27,3,0xc9cac5,.78,.034)??asphalt;
+ if(road===asphalt){asphalt.map=gritTexture();asphalt.color.set(0xffffff);}
+ road.needsUpdate=true;
  // Terrain sits below the road and sidewalk to keep their textures stable.
  box(0,-.039,0,160,.076,140,mat(0x343d36));
  // Asphalt, sidewalk, gutters, and lane paint
  const sidewalk=new THREE.MeshStandardMaterial({map:sidewalkTexture(),roughness:.96});
- floor(0,0,145,16,asphalt);floor(0,-10,145,4,sidewalk);floor(0,10,145,4,sidewalk);
+ floor(0,0,145,16,road);floor(0,-10,145,4,sidewalk);floor(0,10,145,4,sidewalk);
  dressStreet();
  box(0,.08,-8,145,.17,.32,dust);box(0,.08,8,145,.17,.32,dust);
  instanced(15,mat(0xc7b48b),i=>({x:-66+i*9,y:.063,z:0,w:4,h:.018,d:.15}));
@@ -377,12 +417,12 @@ function makeWorld(){
   w:rand(.25,1.5),h:rand(.18,.7),d:1,rx:-Math.PI/2
  }),new THREE.CircleGeometry(1,20));
  // Safehouse
- house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:masonry("#625745",121,6,2,true),theme:"safehouse"});
+ house({cx:-49,cz:-26,w:25,d:23,frontGap:7,doorX:-47,color:detailedMaterial(1,0,5,2,0x797365,.94,.032)??masonry("#625745",121,6,2,true),theme:"safehouse"});
  dressSafehouse();
  const hSign=label("SAFEHOUSE // 01",8,1.35,"#343332","#cbb79a",56);hSign.position.set(-49,4.4,-13.60);world.add(hSign);
  const safeLamp=box(-49,4.73,-19.2,1.9,.13,.38,matUnique(0xf3d7a3));
  safeLamp.material.emissive=new THREE.Color(0xf2b977);safeLamp.material.emissiveIntensity=.45;
- addLight(-46.6,3.74,-20.9,0xffd5a6,17,19);
+ addLight(-46.5,4.23,-20.9,0xffc988,26,18);
  box(-54,.62,-30,3,1.2,2,dark,true);box(-40,.6,-32,1.8,1.1,1.6,mat(0x6a5844));
  windowPanel(-56,2.45,-14.32,2.9,1.9);
  for(let i=0;i<3;i++)box(-56+i*.8,2.5,-14.1,.1,2.4,.12,mat(0x6a5842));
@@ -441,7 +481,7 @@ function makeWorld(){
  // Reference-guided interior: grimy off-white upper wall, deep hospital teal belt and gray kick panel.
  // All panels are decorative; collision still uses the original solid house walls.
  const clinicTeal=wornSurface(0x153d46,427,4,1),clinicUpper=wornSurface(0x989b8f,428,4,1);
- const clinicLower=wornSurface(0x676961,429,5,1),trim=mat(0x343a32),door=wornSurface(0x4b6565,430,1,1);
+ const clinicLower=detailedMaterial(1,0,5,1,0x88877b,.90,.027)??wornSurface(0x676961,429,5,1),trim=mat(0x343a32),door=wornSurface(0x4b6565,430,1,1);
  const medHandle=mat(0x979582,.53,.35);
  for(const [y,h,material] of [[.52,1.0,clinicLower],[2.08,2.15,clinicTeal],[4.09,1.64,clinicUpper]]){
   box(45,y,-38.59,29.3,h,.075,material);
@@ -667,8 +707,28 @@ const roundedGear=(()=>{
  geometry.translate(0,0,-.37);
  return geometry;
 })();
+const armTop=bodyProfile([[.77,0],[.94,.09],[1.02,.59],[.94,.86],[.62,1]],10);
+const armLower=bodyProfile([[.63,0],[.72,.09],[.95,.69],[.98,.92],[.74,1]],10);
+const legTop=bodyProfile([[.72,0],[.88,.18],[1,.70],[.94,.94],[.79,1]],11);
+const legLower=bodyProfile([[.64,0],[.70,.09],[.83,.28],[.98,.57],[.94,.86],[.75,1]],11);
+const backpackShape=(()=>{
+ const shape=new THREE.Shape();
+ shape.moveTo(-.34,-.41);
+ shape.quadraticCurveTo(-.44,-.36,-.42,-.24);
+ shape.lineTo(-.39,.27);
+ shape.quadraticCurveTo(-.36,.41,-.22,.44);
+ shape.quadraticCurveTo(0,.49,.22,.44);
+ shape.quadraticCurveTo(.36,.41,.39,.27);
+ shape.lineTo(.42,-.24);
+ shape.quadraticCurveTo(.44,-.36,.34,-.41);
+ shape.quadraticCurveTo(0,-.45,-.34,-.41);
+ shape.closePath();
+ const geometry=new THREE.ExtrudeGeometry(shape,{depth:.68,bevelEnabled:true,bevelSize:.072,bevelThickness:.115,bevelSegments:2,steps:1,curveSegments:3});
+ geometry.translate(0,0,-.34);
+ return geometry;
+})();
 const survivorCloth=wornSurface(0x514137,926,1,1);
-const packCloth=wornSurface(0x37543e,932,1,1);
+let packCloth=wornSurface(0x37543e,932,1,1);
 const hairCloth=wornSurface(0x352720,329,1,1);
 const contactShadow=(()=>{
  const canvas=document.createElement("canvas");canvas.width=canvas.height=64;
@@ -693,12 +753,12 @@ const civilianOutfits={
 };
 function heldEquipment(arm){
  const steel=mat(0x454946,.50,.38),grip=mat(0x292b28,.91);
- const crowbar=new THREE.Group();crowbar.position.set(.056,-.865,-.034);arm.add(crowbar);
+ const crowbar=new THREE.Group();crowbar.position.set(.03,-.43,-.024);arm.add(crowbar);
  box(0,-.182,0,.043,.57,.044,mat(0x633931,.59,.25),false,crowbar);
  const end=box(0,-.45,-.033,.045,.118,.042,steel,false,crowbar);
  end.rotation.x=.68;
  box(0,-.49,-.073,.062,.036,.082,steel,false,crowbar);
- const pistol=new THREE.Group();pistol.position.set(.057,-.845,-.046);arm.add(pistol);
+ const pistol=new THREE.Group();pistol.position.set(.035,-.42,-.041);arm.add(pistol);
  box(0,-.003,-.12,.084,.086,.28,steel,false,pistol);
  const handle=box(0,-.073,-.035,.07,.118,.073,grip,false,pistol);
  handle.rotation.x=-.22;
@@ -721,26 +781,31 @@ function createSurvivor(kind){
  cap.rotation.x=kind==="mara"?-.005:-.21;
  shaped(unitSphere,hairCloth,head,0,-.067,.146,.157,.083,.092);
  shaped(roundedGear,pants,group,0,1.13,.009,.66,.28,.42);
- const limbs=[];
+ const limbs=[],elbows=[],knees=[];
  for(const side of [-1,1]){
-  const arm=new THREE.Group();arm.position.set(side*.437,.83,0);torso.add(arm);
-  shaped(sleeveShape,top,arm,side*.067,-.77,0,.149,1,.142).rotation.z=side*.10;
-  shaped(unitSphere,skin,arm,side*.09,-.849,-.016,.071,.127,.063);
-  shaped(unitSphere,skin,arm,side*.042,-.82,-.055,.035,.069,.046);
-  limbs.push(arm);
-  const leg=new THREE.Group();leg.position.set(side*.185,1.12,.023);group.add(leg);
-  shaped(trouserShape,pants,leg,0,-.92,0,.185,1,.173);
-  shaped(roundedGear,boot,leg,0,-.939,-.079,.263,.252,.422);
-  box(0,-1.054,-.085,.27,.066,.436,sole,false,leg);
-  limbs.push(leg);
+  const arm=new THREE.Group();arm.position.set(side*.423,.856,-.013);torso.add(arm);
+  arm.rotation.z=side*.089;
+  shaped(armTop,top,arm,0,-.407,0,.139,.488,.153);
+  const elbow=new THREE.Group();elbow.position.set(side*.013,-.405,-.006);arm.add(elbow);
+  shaped(armLower,top,elbow,0,-.355,-.006,.134,.403,.129);
+  shaped(unitSphere,skin,elbow,side*.008,-.424,-.019,.066,.104,.052);
+  shaped(unitSphere,skin,elbow,side*-.035,-.398,-.055,.031,.063,.035);
+  elbows.push(elbow);limbs.push(arm);
+  const leg=new THREE.Group();leg.position.set(side*.172,1.11,.017);group.add(leg);
+  shaped(legTop,pants,leg,0,-.552,0,.181,.625,.169);
+  const knee=new THREE.Group();knee.position.set(0,-.507,-.008);leg.add(knee);
+  shaped(legLower,pants,knee,0,-.438,0,.149,.499,.151);
+  shaped(roundedGear,boot,knee,0,-.446,-.089,.244,.233,.425);
+  box(0,-.562,-.087,.248,.069,.43,sole,false,knee);
+  knees.push(knee);limbs.push(leg);
  }
  if(kind==="player"){
   box(0,.489,-.244,.037,.833,.028,mat(0x42322d),false,torso);
   for(const y of [.194,.365,.539,.717])box(.009,y,-.263,.031,.027,.011,metal,false,torso);
-  shaped(roundedGear,packCloth,torso,0,.52,.402,.665,.96,.425);
-  shaped(roundedGear,edge,torso,0,.489,.623,.533,.655,.082);
-  shaped(roundedGear,packCloth,torso,0,.423,.682,.482,.485,.095);
-  box(0,.684,.733,.39,.031,.025,straps,false,torso);
+  shaped(backpackShape,packCloth,torso,0,.51,.397,.676,.954,.444);
+  shaped(backpackShape,edge,torso,0,.505,.585,.518,.685,.153);
+  shaped(backpackShape,packCloth,torso,0,.443,.654,.475,.478,.134);
+  box(0,.669,.722,.39,.022,.025,straps,false,torso);
   box(0,.925,.432,.218,.082,.098,edge,false,torso);
   for(const side of [-1,1]){
    const strap=box(side*.276,.473,-.237,.072,.818,.056,edge,false,torso);strap.rotation.z=side*.10;
@@ -761,9 +826,9 @@ function createSurvivor(kind){
   box(0,.36,-.251,.55,.65,.055,mat(0x4b4137),false,torso);
   box(.118,.27,-.286,.24,.21,.042,mat(0x554537),false,torso);
  }
- for(const part of [group,torso,head,...limbs])batchStaticProps(part);
- group.userData={limbs,head,torso};
- if(kind==="player")group.userData.equipment=heldEquipment(limbs[2]);
+ for(const part of [group,torso,head,...limbs,...elbows,...knees])batchStaticProps(part);
+ group.userData={limbs,head,torso,elbows,knees};
+ if(kind==="player")group.userData.equipment=heldEquipment(elbows[1]);
  return group;
 }
 const infectedGlow=new THREE.MeshStandardMaterial({color:0x69794b,emissive:0x40612b,emissiveIntensity:.33,roughness:.85});
@@ -1005,7 +1070,7 @@ function updateEnemies(dt){
 function animateLimbs(char,amount){const limbs=char.userData.limbs;if(!limbs)return;limbs[0].rotation.x=amount*.48;limbs[1].rotation.x=-amount*.65;limbs[2].rotation.x=-amount*.48;limbs[3].rotation.x=amount*.65;}
 
 function poseSurvivor(moving,sprinting){
- const {limbs,head,torso,equipment}=playerVisual.userData;
+ const {limbs,head,torso,equipment,elbows,knees}=playerVisual.userData;
  if(!limbs)return;
  // Additive animation over original four pivot groups: no replacement skeleton.
  torso.rotation.x=sprinting?-.13:moving?-.035:Math.sin(state.time*1.7)*.012;
@@ -1013,6 +1078,13 @@ function poseSurvivor(moving,sprinting){
  head.rotation.x=sprinting?.08:0;
  const swing=state.meleeAnim>0?Math.sin(Math.PI*(1-state.meleeAnim/WEAPONS.crowbar.cooldown)):0;
  const recoil=state.pistolAnim>0?Math.sin(Math.PI*(1-state.pistolAnim/.28)):0;
+ const stride=Math.sin(gaitPhase)*gaitBlend;
+ const roll=state.dodgeTime>0?Math.sin(Math.PI*(1-state.dodgeTime/DODGE.duration)):0;
+ knees[0].rotation.x=-(.065+Math.max(0,stride)*.67+roll*.51);
+ knees[1].rotation.x=-(.065+Math.max(0,-stride)*.67+roll*.51);
+ elbows[0].rotation.x=.14+Math.max(0,-stride)*.38+roll*.31;
+ elbows[1].rotation.x=.15+Math.max(0,stride)*.36+swing*.26+roll*.31;
+ torso.rotation.x+=roll*.35;
  const gunDrawn=state.hasGun&&state.meleeAnim<=0;
  equipment.pistol.visible=gunDrawn;
  equipment.crowbar.visible=!gunDrawn;
@@ -1021,7 +1093,8 @@ function poseSurvivor(moving,sprinting){
  if(gunDrawn){
   limbs[2].rotation.x+=.30+recoil*.88;
   limbs[0].rotation.x+=recoil*.34;
-  equipment.pistol.rotation.x=-.43-recoil*.73;
+  elbows[1].rotation.x+=.32+recoil*.08;
+  equipment.pistol.rotation.x=-.65-recoil*.73;
  }
  // Differentiate sprint, sidestep and idle without expensive animation mixers.
  if(sprinting){limbs[0].rotation.x*=1.35;limbs[1].rotation.x*=1.30;limbs[3].rotation.x*=1.30;}
@@ -1082,9 +1155,11 @@ function updatePlayer(dt){
  }
  playerSprint=stepping&&sprint;
  gaitBlend+=((stepping?1:0)-gaitBlend)*(1-Math.exp(-dt*13));
- playerVisual.position.set(state.x,(1-Math.cos(gaitPhase*2))*gaitBlend*.027,state.z);
+ const crouch=rolling?Math.sin(Math.PI*(1-state.dodgeTime/DODGE.duration))*.40:0;
+ playerVisual.position.set(state.x,(1-Math.cos(gaitPhase*2))*gaitBlend*.028-crouch,state.z);
  playerShadow.position.set(state.x,.085,state.z);
- playerVisual.rotation.y=state.angle;
+ const facingDifference=state.angle-playerVisual.rotation.y;
+ playerVisual.rotation.y+=Math.atan2(Math.sin(facingDifference),Math.cos(facingDifference))*(1-Math.exp(-dt*18));
  animateLimbs(playerVisual,Math.sin(gaitPhase)*gaitBlend*(sprint?1.1:.72));
  poseSurvivor(stepping,stepping&&sprint);
  if(rolling){playerVisual.userData.torso.rotation.z=.32*Math.sin((1-state.dodgeTime/DODGE.duration)*Math.PI);}
@@ -1181,7 +1256,7 @@ function currentMetrics(){
  geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
  pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,
  pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
- quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.12"};
+ quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.13",materialSheet:Boolean(materialTile)};
 }
 function updatePerfReadout(){
  if($("perf-panel").hidden)return;
@@ -1196,7 +1271,7 @@ function exportPerformanceReport(){
   metrics:currentMetrics(),framesMs:[...qaFrameMs]};
  const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob);
- const link=document.createElement("a");link.href=url;link.download="ashford-v012-performance.json";
+ const link=document.createElement("a");link.href=url;link.download="ashford-v013-performance.json";
  document.body.appendChild(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1500);
  toast("LOCAL PERFORMANCE REPORT SAVED");
@@ -1206,6 +1281,15 @@ function applyRenderTier(tier){
  const preset=graphicsPresets[tier];
  renderer.setPixelRatio(Math.min(devicePixelRatio,preset.pixelRatio));
  renderer.shadowMap.enabled=preset.shadows;
+ const quality=tier==="quality";
+ scene.background=tier==="performance"?performanceSky:skyTexture;
+ scene.environment=quality?skyTexture:null;
+ const anisotropy=quality?Math.min(renderer.capabilities.getMaxAnisotropy(),8):1;
+ for(const {material,map,relief} of finishMaterials){
+  if(map.anisotropy!==anisotropy){map.anisotropy=anisotropy;map.needsUpdate=true;}
+  const bump=quality?map:null;
+  if(material.bumpMap!==bump){material.bumpMap=bump;material.bumpScale=relief;material.needsUpdate=true;}
+ }
  dustParticles.visible=preset.particles;
  updateLightBudget();
  qualityFrames=0;qualitySeconds=0;
@@ -1355,7 +1439,8 @@ function installLocalQA(){
    return {sampleCount:n,averageFPS:avg?1000/avg:null,p50FrameMs:n?frames[Math.floor(n*.5)]:null,p95FrameMs:n?frames[Math.min(n-1,Math.floor(n*.95))]:null,
      drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
      pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,pixelRatio:renderer.getPixelRatio(),
-     quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled};
+     quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,materialSheet:Boolean(materialTile),
+     surfaceRelief:finishMaterials.some(({material})=>Boolean(material.bumpMap)),skyReflections:scene.environment===skyTexture};
   },
   noDamage(on){state.qaNoDamage=Boolean(on);},
   combatSetup(type="walker",range=6){
@@ -1416,6 +1501,9 @@ function animate(){
  sampleGraphics(elapsed);
 }
 try{
+ materialTile=await loadMaterials();
+ const textile=detailedMaterial(1,1,1,1,0xb1ae86,.94,.019);
+ if(textile){packCloth.map.dispose();packCloth.dispose();packCloth=textile;}
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);playerShadow=attachContactShadow(world,state.x,state.z);
  createNPC("mara",-14,-27,Math.PI);createNPC("vale",48.9,-30.75,Math.PI);createNPC("guard",40.2,-31.1,Math.PI*.85);
  updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();world.updateMatrixWorld(true);updateCamera(1);animate();

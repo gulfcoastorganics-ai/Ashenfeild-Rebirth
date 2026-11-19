@@ -145,3 +145,16 @@ button:focus-visible,input:focus-visible { outline:2px solid #f4c994;outline-off
  #intro .kicker { letter-spacing:.12em;line-height:1.5; }
  #intro .sublead { max-width:28ch; }
 }
+
+/* Field display uses a subdued glass finish over the lit world. */
+#hud .leftpanel,#hud .missionpanel,#hud .environment-readout,#hud .weapon-card {
+ background:linear-gradient(145deg,rgba(21,28,29,.93),rgba(10,15,16,.79));
+ border-color:#b3a58776;
+ border-radius:4px;
+ box-shadow:0 8px 26px #070b0c62;
+}
+#hud .missionpanel { border-left:2px solid #caa76b; }
+#hud .missionpanel .signal { background:#e0bb7b; }
+#hud .missionpanel .eyebrow,#hud #waypoint-distance { color:#e0c28b; }
+#hud .missionpanel h2 { color:#f4f1e7; }
+#hud .weapon-card .weapon-divider { background:#d1a46d; }
