@@ -16,6 +16,8 @@ Baseline and rollback point `4372bd681f5a62f8f7d26b4d2fb4816078c7bbb3` is the V0
 
 Choose **Graphics: Quality** in the pause menu to enable asset normal and roughness maps, the existing sky reflections and shadow preset, and the new room-dependent exposure and lighting color. **Fine surface detail in Quality** and **Scene color grading in Quality** can be switched independently. Auto keeps its adaptive Performance and Balanced modes. Performance and Balanced use diffuse maps with constant roughness. Static photos load after the initial scene, while the GLB and optional loader start when the player approaches the market. Missing assets retain the existing procedural surfaces and fixtures. Material variants share image uploads while retaining individual UV repeats. All new runtime artwork is served from the game origin, and the existing pinned Three.js CDN URL remains the only library request outside that origin.
 
+Balanced tracks the sun's shadow camera around the player in a smaller area. This keeps nearby shadows and excludes distant casters from the expensive shadow pass. The automated resource sweep explicitly uses Balanced so Auto switching presets during the test cannot hide a shadow draw-call overrun.
+
 See [ASSET_MANIFEST.md](ASSET_MANIFEST.md) for authors, exact upstream downloads, licenses, and byte counts. Run `python scripts/import-poly-haven.py` with Python, Pillow, and curl to regenerate the checked-in WebP and GLB files. The script verifies the 1K originals with the sizes and checksums published by Poly Haven. The shelf keeps its geometry and UVs. The import repacks its buffer and smaller images into a single binary glTF so no mesh or texture decoder is required.
 
 ## Source choices

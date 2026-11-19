@@ -65,7 +65,7 @@ renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 $("game").appendChild(renderer.domElement);
 const hemi=new THREE.HemisphereLight(0xacbcc9,0x544732,1.34);scene.add(hemi);
-const moon=new THREE.DirectionalLight(0xffd8ab,1.92);moon.position.set(-34,32,42);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0003;moon.shadow.normalBias=.037;scene.add(moon);
+const moon=new THREE.DirectionalLight(0xffd8ab,1.92);moon.position.set(-34,32,42);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0003;moon.shadow.normalBias=.037;scene.add(moon,moon.target);
 const world=new THREE.Group();scene.add(world);
 const obstacles=[],enemies=[],effects=[],localLights=[],streetDetails=[],finishMaterials=[];
 let lightBudgetElapsed=0;
@@ -179,6 +179,11 @@ function sphere(x,y,z,r,material,group=world){const m=mesh(unitSphere,material,x
 function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);localLights.push(l);return l;}
 function updateLightBudget(){
  const facadeRange=renderTier==="performance"?37:renderTier==="balanced"?57:90;
+ // Track the nearby scene in Balanced so distant casters stay out of the shadow pass.
+ const offsetX=renderTier==="balanced"?Math.round(state.x/4)*4:0;
+ const offsetZ=renderTier==="balanced"?Math.round(state.z/4)*4:0;
+ moon.target.position.set(offsetX,0,offsetZ);
+ moon.position.set(offsetX-34,32,offsetZ+42);
  for(const {x,z,group} of streetDetails)group.visible=Math.hypot(x-state.x,z-state.z)<facadeRange;
  for(const l of localLights){
   const limit=Math.max(24,l.distance+12);
@@ -1387,6 +1392,11 @@ function applyRenderTier(tier){
  const preset=graphicsPresets[tier];
  renderer.setPixelRatio(Math.min(devicePixelRatio,preset.pixelRatio));
  renderer.shadowMap.enabled=preset.shadows;
+ const shadowCamera=moon.shadow.camera;
+ const shadowWidth=tier==="balanced"?37:70,shadowHeight=tier==="balanced"?32:60;
+ shadowCamera.left=-shadowWidth;shadowCamera.right=shadowWidth;
+ shadowCamera.bottom=-shadowHeight;shadowCamera.top=shadowHeight;
+ shadowCamera.updateProjectionMatrix();
  const quality=tier==="quality";
  scene.background=tier==="performance"?performanceSky:skyTexture;
  scene.environment=quality?skyTexture:null;
