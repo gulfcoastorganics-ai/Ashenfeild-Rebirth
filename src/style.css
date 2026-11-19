@@ -106,3 +106,42 @@
  .context{bottom:55px}
  .missionpanel{top:62px}
 }
+
+/* Opening artwork and field settings. */
+#intro .intro-backdrop {
+ background:
+  linear-gradient(90deg,rgba(9,12,13,.87),rgba(15,19,20,.30) 56%,transparent 80%),
+  linear-gradient(0deg,rgba(6,8,9,.78),transparent 48%),
+  url("../assets/ashford-key-art.webp") center 54% / cover no-repeat;
+ filter:none;
+}
+#intro .intro-content {
+ width: min(1200px, calc(100% - 112px));
+ padding: 20px 0;
+}
+#intro .kicker { color:#e9c99a; margin:0 0 20px; letter-spacing:.19em; }
+#intro .sublead { max-width:380px; margin:23px 0 0; color:#e1ddd0; }
+#intro .primary.big { margin-top:20px; }
+#intro .primary:disabled { opacity:.45; cursor:default; }
+.startup-status { max-width:390px; margin:18px 0 10px; color:#f4d3ab; font-size:14px; line-height:1.55; }
+.volume-setting {
+ display:grid;grid-template-columns:auto 1fr;align-items:center;gap:16px;
+ min-height:48px;margin-top:12px;padding:0 13px;border:1px solid #8b7a5e;
+ color:#e4d1ae;font-size:13px;
+}
+.volume-setting input { width:100%;min-width:0;accent-color:#d9a875; }
+.pause-box { max-height: calc(100dvh - 34px); overflow:auto; }
+.pause-box .save-note { margin:15px 0 0;font-size:12px;color:#b6b4a8; }
+button:focus-visible,input:focus-visible { outline:2px solid #f4c994;outline-offset:3px; }
+@media(max-width:670px) {
+ #intro .intro-content { width:calc(100% - 40px); }
+ #intro .intro-backdrop {
+  background-image:
+   linear-gradient(90deg,rgba(9,12,13,.81),rgba(15,19,20,.36)),
+   linear-gradient(0deg,rgba(6,8,9,.74),transparent 68%),
+   url("../assets/ashford-key-art.webp");
+  background-position:center,center,65% center;
+ }
+ #intro .kicker { letter-spacing:.12em;line-height:1.5; }
+ #intro .sublead { max-width:28ch; }
+}
