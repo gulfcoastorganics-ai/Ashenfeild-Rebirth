@@ -26,6 +26,19 @@ See [ASSET_MANIFEST.md](ASSET_MANIFEST.md) for authors, exact upstream downloads
 
 ## Review and reproducibility
 
+The [Quality comparison](review/quality-comparison.jpg) and [Performance comparison](review/performance-comparison.jpg) cover all four locations, the survivor, and an infected character. [Quality telemetry](review/quality-metrics.json) and [Performance telemetry](review/performance-metrics.json) give results for every view.
+
+| Location | Performance FPS before → after | Performance p95 ms before → after | Quality FPS before → after | Quality p95 ms before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Safehouse | 19.2 → 16.2 | 83 → 117 | 2.8 → 3.7 | 467 → 683 |
+| Market | 15.7 → 13.8 | 100 → 167 | 3.6 → 3.4 | 350 → 367 |
+| Patrol road | 12.2 → 12.4 | 200 → 183 | 2.9 → 3.4 | 483 → 383 |
+| Clinic | 13.1 → 13.2 | 200 → 183 | 3.2 → 3.4 | 400 → 750 |
+
+These short, 24-frame software samples expose inconsistent frame pacing. Quality after the pass ranged from about 3.0 to 3.7 FPS across the six fixed scenes. The main Performance changes were slower indoor frames at the safehouse and market. The comparison uses the same 1000 × 640 viewport and preset on each build.
+
+The four diffuse maps total 135,898 B. The eight Quality maps add 138,050 B and the 182-triangle shelf adds 83,592 B. The new artwork totals 357,540 B (349 KiB) before HTTP compression. If all shared surface maps are uploaded as RGBA8 with full mip chains, their estimated GPU footprint is 5.3 MiB for the diffuse maps plus 6.7 MiB for Quality maps. This estimate excludes the shelf, renderer targets, and pre-existing resources. The two deferred Three.js helper modules add 140,428 B of source before transport compression.
+
 Use the commands below with a spare checkout of the V0.13 baseline. A seeded scene and matching camera coordinates keep the before/after views comparable. The static benchmark records FPS, p95 frame times, draw calls, triangles, geometry and texture counts, and the renderer name. Screenshot capture parks gameplay. The separate `test:campaign` suite uses normal player inputs through the ending.
 
 ```sh

@@ -1,0 +1,110 @@
+{
+  "environment": "Software rendering. Seeded world, fixed views, simulation paused during timing. Frame pace and JS callbacks include any browser/driver blocking.",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "browser": "141.0.7390.37",
+  "graphics": "performance",
+  "viewport": {
+    "width": 1000,
+    "height": 640
+  },
+  "before": {
+    "safehouse": {
+      "fps": 19.2,
+      "p95FrameMs": 83.4,
+      "drawCalls": 185,
+      "triangles": 12716,
+      "geometries": 27,
+      "textures": 18
+    },
+    "market": {
+      "fps": 15.65,
+      "p95FrameMs": 100.1,
+      "drawCalls": 156,
+      "triangles": 14312,
+      "geometries": 29,
+      "textures": 23
+    },
+    "patrol": {
+      "fps": 12.2,
+      "p95FrameMs": 200,
+      "drawCalls": 287,
+      "triangles": 20731,
+      "geometries": 41,
+      "textures": 41
+    },
+    "clinic": {
+      "fps": 13.09,
+      "p95FrameMs": 199.9,
+      "drawCalls": 216,
+      "triangles": 17748,
+      "geometries": 41,
+      "textures": 41
+    },
+    "survivor": {
+      "fps": 18.0,
+      "p95FrameMs": 150,
+      "drawCalls": 185,
+      "triangles": 12680,
+      "geometries": 41,
+      "textures": 41
+    },
+    "infected": {
+      "fps": 11.34,
+      "p95FrameMs": 183.4,
+      "drawCalls": 125,
+      "triangles": 10996,
+      "geometries": 41,
+      "textures": 42
+    }
+  },
+  "after": {
+    "safehouse": {
+      "fps": 16.18,
+      "p95FrameMs": 116.8,
+      "drawCalls": 194,
+      "triangles": 13489,
+      "geometries": 28,
+      "textures": 17
+    },
+    "market": {
+      "fps": 13.85,
+      "p95FrameMs": 166.6,
+      "drawCalls": 154,
+      "triangles": 14260,
+      "geometries": 31,
+      "textures": 26
+    },
+    "patrol": {
+      "fps": 12.41,
+      "p95FrameMs": 183.3,
+      "drawCalls": 294,
+      "triangles": 19928,
+      "geometries": 43,
+      "textures": 42
+    },
+    "clinic": {
+      "fps": 13.21,
+      "p95FrameMs": 183.3,
+      "drawCalls": 225,
+      "triangles": 17449,
+      "geometries": 43,
+      "textures": 42
+    },
+    "survivor": {
+      "fps": 17.78,
+      "p95FrameMs": 149.9,
+      "drawCalls": 175,
+      "triangles": 11817,
+      "geometries": 43,
+      "textures": 42
+    },
+    "infected": {
+      "fps": 10.83,
+      "p95FrameMs": 166.7,
+      "drawCalls": 126,
+      "triangles": 11296,
+      "geometries": 43,
+      "textures": 43
+    }
+  }
+}
