@@ -4,6 +4,17 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.16 — Survival sandbox
+
+Search furniture and roadside supplies, craft in the existing Survivor's Pack,
+and bring a brace kit back to the safehouse. Its locker stores supplies between
+visits. Optional roaming encounters use the same infected and combat rules as
+the campaign. After the original ending, choose **Continue Exploring** to stay
+in Ashford with your pack, loot history and shelter.
+
+See the [V0.16 production report](docs/V016-PRODUCTION-REPORT.md) for controls,
+save migration, test results and benchmark procedures.
+
 ## V0.15.2 — Combat, camera and atmosphere
 
 Auto graphics now scale character detail separately from render resolution.

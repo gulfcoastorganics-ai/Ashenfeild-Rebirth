@@ -2,7 +2,11 @@ const axes=["x","y","z"];
 // Length fraction along a camera arm, with clearance for its near plane.
 export function cameraClearance(origin,destination,boxes,radius=.27){
  let closest=1;
+ const lowX=Math.min(origin.x,destination.x)-radius,highX=Math.max(origin.x,destination.x)+radius;
+ const lowY=Math.min(origin.y,destination.y)-radius,highY=Math.max(origin.y,destination.y)+radius;
+ const lowZ=Math.min(origin.z,destination.z)-radius,highZ=Math.max(origin.z,destination.z)+radius;
  for(const {min,max} of boxes){
+  if(lowX>max.x||highX<min.x||lowY>max.y||highY<min.y||lowZ>max.z||highZ<min.z)continue;
   let enter=0,leave=closest,inside=true;
   for(const axis of axes){
    const start=origin[axis],delta=destination[axis]-start,lo=min[axis]-radius,hi=max[axis]+radius;

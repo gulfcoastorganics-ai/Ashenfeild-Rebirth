@@ -61,7 +61,20 @@
 </div>
 <div class="modal" id="pack-modal">
  <div class="modal-shade"></div>
- <div class="panel-modal"><div class="panel-head"><div><div class="eyebrow">FIELD OPERATIONS</div><h2>SURVIVOR'S PACK</h2></div><button id="close-pack">✕</button></div><div class="inventory-grid" id="inventory-items"></div><div class="inventory-footer">ITEMS FOUND ON THE ASHFORD OPENING ROUTE <span>ESC TO CLOSE</span></div></div>
+ <div class="panel-modal sandbox-panel" role="dialog" aria-modal="true" aria-labelledby="pack-title">
+  <div class="panel-head"><div><div class="eyebrow">FIELD OPERATIONS</div><h2 id="pack-title">Survivor's pack</h2></div><button id="close-pack" aria-label="Close pack">✕</button></div>
+  <div class="sandbox-tabs"><button id="pack-tab">PACK</button><button id="craft-tab">CRAFT</button></div>
+  <p id="pack-status" role="status" hidden></p>
+  <div class="inventory-grid" id="inventory-items"></div>
+ </div>
+</div>
+<div class="modal" id="field-modal">
+ <div class="modal-shade"></div>
+ <div class="panel-modal sandbox-panel" role="dialog" aria-modal="true" aria-labelledby="field-title">
+  <div class="panel-head"><div><div class="eyebrow" id="field-label">SCAVENGE</div><h2 id="field-title"></h2></div><button id="close-field" aria-label="Close interaction">✕</button></div>
+  <p id="field-status" role="status"></p>
+  <div class="field-list" id="field-items"></div>
+ </div>
 </div>
 <div class="modal" id="pause-modal">
  <div class="modal-shade"></div>
@@ -82,7 +95,7 @@
 </div>
 <div class="modal" id="gameover">
  <div class="modal-shade"></div>
- <div class="panel-modal ending"><div class="eyebrow" id="end-label">CONNECTION LOST</div><h2 id="end-title">YOU DID NOT SURVIVE.</h2><p id="end-message">Ashford doesn't forgive mistakes.</p><button id="end-restart" class="primary">TRY AGAIN</button></div>
+ <div class="panel-modal ending"><div class="eyebrow" id="end-label">CONNECTION LOST</div><h2 id="end-title">YOU DID NOT SURVIVE.</h2><p id="end-message">Ashford doesn't forgive mistakes.</p><button id="continue-exploring" class="primary" hidden>CONTINUE EXPLORING</button><button id="end-restart" class="ghost">RETRY CHECKPOINT</button></div>
 </div>
 <div id="loader" class="loader"><div class="loader-mark">DZ<span>:</span>A</div><div class="loader-line"></div><small>LOADING ASHFORD COUNTY</small></div>
 <script>

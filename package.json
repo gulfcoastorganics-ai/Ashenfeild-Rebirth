@@ -1,7 +1,7 @@
 {
   "name": "ashford-rebirth-reconstruction",
   "private": true,
-  "version": "0.15.2",
+  "version": "0.16.0",
   "type": "module",
   "description": "Independent browser survival game reconstruction; not recovered Sites v7.1 source",
   "scripts": {
@@ -13,7 +13,8 @@
     "test:combat": "node tests/combat-play.mjs",
     "test:campaign": "node tests/campaign-survival.mjs",
     "test:visual": "node tests/visual-perf.mjs",
-    "test:reference": "node tests/reference-visual.mjs"
+    "test:reference": "node tests/reference-visual.mjs",
+    "test:sandbox": "node tests/sandbox-browser.mjs"
   },
   "devDependencies": {
     "playwright": "1.56.1"
