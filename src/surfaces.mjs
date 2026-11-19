@@ -2,7 +2,7 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.m
 
 export function createSurfaceLibrary(){
  const images=new Map(),sources=new WeakMap(),surfaces=[];
- let detailEnabled=false;
+ let detailEnabled=false,colorsLoading;
 
  function imageFor(asset,map){
   const name=`${asset}-${map}.webp`;
@@ -33,8 +33,8 @@ export function createSurfaceLibrary(){
   const nextNormal=detailEnabled?normal:null;
   const nextRough=detailEnabled?rough:null;
   if(material.normalMap===nextNormal&&material.roughnessMap===nextRough)return;
-  if(!detailEnabled){normal?.dispose();rough?.dispose();}
-  else{if(normal)normal.needsUpdate=true;if(rough)rough.needsUpdate=true;}
+  // These maps are created on first use. Retain their sampler uploads while a
+  // preset is off so cycling back to Quality does not upload the pixels again.
   material.normalMap=nextNormal;
   material.roughnessMap=nextRough;
   material.needsUpdate=true;
@@ -58,7 +58,7 @@ export function createSurfaceLibrary(){
    return material;
   },
   loadColors(){
-   return Promise.all(surfaces.map(async surface=>{
+   return colorsLoading??=Promise.all(surfaces.map(async surface=>{
     const image=await imageFor(surface.asset,"color");
     if(!image)return;
     const {material}=surface;

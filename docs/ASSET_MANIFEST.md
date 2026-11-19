@@ -1,5 +1,23 @@
 # Ashford asset manifest
 
+## V0.14 character assets and motion
+
+All five checked-in character GLBs are Ashford-specific builds using [Ara 3D Gen](https://github.com/olatunde85/3d-gen) `ara3d@0.9.0` and [ara3d-data@1.1.0](https://www.npmjs.com/package/ara3d-data/v/1.1.0). The latter repacks the [MakeHuman core assets](https://www.makehumancommunity.org/about/license.html) under CC0 1.0. Contributors named in the asset notice include Data Collection AB, Joel Palmius, and Jonas Hauquier. Build profiles live in `scripts/characters/`. Geometry and embedded wardrobe textures were condensed for Ashford. The red plaid was created for this build. The generator and its asset archive are build inputs.
+
+| Role | Runtime file | Raw export | Optimized | Triangles |
+| --- | --- | ---: | ---: | ---: |
+| Survivor | `assets/characters/survivor.glb` | 5,706,848 B | 646,756 B | 15,067 |
+| Mara | `assets/characters/mara.glb` | 4,760,376 B | 367,436 B | 9,518 |
+| Dr. Vale | `assets/characters/vale.glb` | 4,635,364 B | 366,696 B | 11,067 |
+| Clinic guard | `assets/characters/guard.glb` | 3,408,460 B | 286,772 B | 9,743 |
+| Four infected variants | `assets/characters/infected.glb` | 3,178,840 B | 217,380 B | 5,645 per instance |
+
+The survivor file embeds the motion bank used by this game. Walk, slouch walk, and run originate with the [CMU Graphics Lab Motion Capture Database](https://mocap.cs.cmu.edu/) and are delivered as retargeted animations in the game. CMU allows product use under its published terms and restricts resale of the data itself. The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217. The remaining selected motions are from Ara 3D Gen's animation library. The Ara export tool is MIT. MakeHuman source code, Mixamo assets, and third-party weapon models were excluded.
+
+`src/vendor/utils/SkeletonUtils.js` is the unmodified [Three.js r160.1 helper](https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/utils/SkeletonUtils.js). Its MIT notice is in `src/vendor/THREE-LICENSE.txt`. The GLBs require `KHR_mesh_quantization` and use embedded JPEG and PNG textures. They do not need an additional decoder.
+
+## Environment assets
+
 All Poly Haven resources below use [CC0 1.0](https://polyhaven.com/license). Attribution is optional and recorded here for provenance.
 
 Sizes are in bytes. Source sizes refer to the 1K downloads, before resizing and encoding.

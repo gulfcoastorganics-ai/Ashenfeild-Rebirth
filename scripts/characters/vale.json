@@ -1,0 +1,42 @@
+{
+  "kind": "ara-character",
+  "version": 1,
+  "params": {
+    "detail": "low",
+    "rig": "game_lite",
+    "faceBones": false,
+    "faceShapes": false,
+    "speechShapes": false,
+    "eyelashes": "none",
+    "teeth": "none",
+    "tongue": false,
+    "outfit": "none",
+    "shoes": "sneakers",
+    "bottom": "uniform_trousers",
+    "name": "vale",
+    "gender": 0,
+    "age": 0.72,
+    "african": 0.13,
+    "asian": 0.57,
+    "caucasian": 0.3,
+    "hair": "short02",
+    "top": "uniform_shirt",
+    "garmentStyles": {
+      "uniform_shirt": {
+        "pattern": "solid",
+        "color": "#8aa6a4",
+        "color2": "#242322"
+      },
+      "uniform_trousers": {
+        "pattern": "solid",
+        "color": "#697f82",
+        "color2": "#242322"
+      },
+      "sneakers": {
+        "pattern": "workwear",
+        "color": "#c7c5bb",
+        "color2": "#242322"
+      }
+    }
+  }
+}

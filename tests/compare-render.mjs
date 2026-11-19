@@ -7,8 +7,11 @@ import {chromium} from "playwright";
 const currentRoot=resolve(import.meta.dirname,"..");
 const baselinePath=process.argv[2];
 const setting=process.argv[3]??"performance";
+const interiorsOnly=process.argv.includes("--indoors");
+const actorsOnly=process.argv.includes("--actors");
+const fallbackModels=process.argv.includes("--fallback");
 if(!baselinePath||!["performance","quality"].includes(setting))throw Error("Usage: node tests/compare-render.mjs <baseline checkout> [performance|quality]");
-const outputPath=resolve(currentRoot,"artifacts",`comparison-${setting}`);
+const outputPath=resolve(currentRoot,"artifacts",`comparison-${setting}${interiorsOnly?"-indoors":actorsOnly?"-actors":""}${fallbackModels?"-fallback":""}`);
 const viewport={width:1000,height:640};
 const types={".html":"text/html",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",".webp":"image/webp",".glb":"model/gltf-binary"};
 const views=[
@@ -18,6 +21,13 @@ const views=[
  {name:"clinic",x:44,z:-25.7,yaw:0,stage:6},
  {name:"survivor",x:-47,z:-17.8,yaw:Math.PI,facing:0,stage:0},
  {name:"infected", enemy:true}
+];
+const actors=[
+ {name:"survivor",kind:"player",x:-47,z:-17.8,yaw:Math.PI,facing:0,stage:0},
+ {name:"mara",kind:"mara",x:-12.1,z:-22.8,yaw:0,stage:2},
+ {name:"vale",kind:"vale",x:49.4,z:-26.6,yaw:0,stage:6},
+ {name:"guard",kind:"guard",x:40.7,z:-26.3,yaw:0,stage:6},
+ ...["walker","runner","brute","spitter"].map(kind=>({name:kind,kind,enemy:true})),
 ];
 
 async function serve(root){
@@ -47,8 +57,9 @@ async function capture(browser,root,build){
  const errors=[];
  page.on("pageerror",error=>errors.push(error.message));
  try{
-  await page.addInitScript(mode=>{
+  await page.addInitScript(({mode,fallback})=>{
    localStorage.setItem("ashfordGraphicsV02",mode);
+   if(fallback)localStorage.setItem("ashfordDetailedCharacters","off");
    let seed=81329;
    Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
    const request=window.requestAnimationFrame.bind(window);
@@ -61,7 +72,7 @@ async function capture(browser,root,build){
      if(window.renderCallbackMs.length<1000)window.renderCallbackMs.push(performance.now()-started);
     });
    };
-  },setting);
+  },{mode:setting,fallback:fallbackModels});
   const started=Date.now();
   await page.goto("http://127.0.0.1:"+server.address().port+"/?__qa=1",{waitUntil:"domcontentloaded"});
   await page.waitForFunction(()=>Boolean(window.__ashfordQA));
@@ -77,7 +88,7 @@ async function capture(browser,root,build){
    return gl.getParameter(debug?debug.UNMASKED_RENDERER_WEBGL:gl.RENDERER);
   });
   const samples=[];
-  for(const view of views){
+  for(const view of interiorsOnly?views.slice(0,2):actorsOnly?actors:views){
    if(!view.enemy){
     await page.evaluate(({x,z,yaw,stage,facing=yaw})=>window.__ashfordQA.referenceView(x,z,yaw,stage,facing),view);
     if(view.name==="market")await page.waitForFunction(()=>{
@@ -88,19 +99,30 @@ async function capture(browser,root,build){
    }
    await page.keyboard.press("Escape");
    await page.evaluate(()=>{document.querySelector("#pause-modal").style.visibility="hidden";});
-   if(view.enemy)await page.evaluate(()=>window.__ashfordQA.combatSetup("runner",4.6));
-   const {raf,callbacks}=await page.evaluate(async()=>{
+   if(view.enemy)await page.evaluate(kind=>window.__ashfordQA.combatSetup(kind,4.6),view.kind??"runner");
+   if(!fallbackModels)await page.waitForFunction(view=>{
+    const {characters}=window.__ashfordQA.perf();
+    if(!characters)return true;
+    const shown=kind=>characters.some(r=>r.kind===kind&&r.shown);
+    return shown("player")&&(!view.kind||shown(view.kind))&&(view.name!=="market"||shown("mara"));
+   },view,{timeout:30000});
+   const windows=await page.evaluate(async(sampleCount)=>{
     const next=()=>new Promise(resolve=>requestAnimationFrame(resolve));
     for(let i=0;i<5;i++)await next();
-    window.renderCallbackMs.length=0;
-    const raf=[];
-    let previous=await next();
-    for(let i=0;i<24;i++){
-     const timestamp=await next();
-     raf.push(timestamp-previous);previous=timestamp;
+    const windows=[];
+    for(let sample=0;sample<sampleCount;sample++){
+     window.renderCallbackMs.length=0;
+     const raf=[];
+     let previous=await next();
+     for(let i=0;i<24;i++){
+      const timestamp=await next();
+      raf.push(timestamp-previous);previous=timestamp;
+     }
+     windows.push({raf,callbacks:window.renderCallbackMs.slice(1)});
     }
-    return {raf,callbacks:window.renderCallbackMs.slice(1)};
-   });
+    return windows;
+   },interiorsOnly?3:1);
+   const raf=windows.flatMap(w=>w.raf),callbacks=windows.flatMap(w=>w.callbacks);
    const render=await page.evaluate(()=>window.__ashfordQA.perf());
    assert.equal(render.pixelRatio,setting==="performance"?.85:1);
    assert(render.drawCalls>0&&render.triangles>0);
@@ -108,7 +130,7 @@ async function capture(browser,root,build){
    const frame=stats(raf);
    const sample={view,drawCalls:render.drawCalls,triangles:render.triangles,geometries:render.geometries,
     textures:render.textures,activePointLights:render.pointLightsActive,pixelRatio:render.pixelRatio,
-    fps:1000/frame.meanMs,frame,renderCallback:stats(callbacks),frameSamplesMs:raf};
+    fps:1000/frame.meanMs,frame,windows:windows.map(w=>stats(w.raf)),renderCallback:stats(callbacks),frameSamplesMs:raf};
    samples.push(sample);
    console.log(build,view.name,JSON.stringify({drawCalls:sample.drawCalls,triangles:sample.triangles,
     textures:sample.textures,fps:sample.fps,p95FrameMs:frame.p95Ms,p95CallbackMs:sample.renderCallback.p95Ms}));

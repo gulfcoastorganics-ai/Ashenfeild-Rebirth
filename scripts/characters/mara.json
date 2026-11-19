@@ -1,0 +1,39 @@
+{
+  "kind": "ara-character",
+  "version": 1,
+  "params": {
+    "detail": "low",
+    "rig": "game_lite",
+    "faceBones": false,
+    "faceShapes": false,
+    "speechShapes": false,
+    "eyelashes": "none",
+    "teeth": "none",
+    "tongue": false,
+    "outfit": "none",
+    "shoes": "combat_boots",
+    "bottom": "uniform_trousers",
+    "name": "mara",
+    "gender": 0,
+    "age": 0.57,
+    "african": 0.72,
+    "caucasian": 0.25,
+    "asian": 0.03,
+    "muscle": 0.45,
+    "weight": 0.4,
+    "hair": "ponytail01",
+    "top": "uniform_shirt_long",
+    "garmentStyles": {
+      "uniform_shirt_long": {
+        "pattern": "solid",
+        "color": "#a68156",
+        "color2": "#242322"
+      },
+      "uniform_trousers": {
+        "pattern": "solid",
+        "color": "#3d5052",
+        "color2": "#242322"
+      }
+    }
+  }
+}
