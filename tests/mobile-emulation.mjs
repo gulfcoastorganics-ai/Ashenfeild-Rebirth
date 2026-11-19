@@ -51,10 +51,14 @@ try{
  const runPoint={x:sprint.x+sprint.width/2,y:sprint.y+sprint.height/2,id:2};
  await cdp.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[stickPoint,runPoint]});
  await cdp.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{...stickPoint,y:y-32},runPoint]});
- await page.waitForFunction(initial=>window.__ashfordQA.snapshot().stamina<initial-1,after.stamina,{timeout:10000});
+ const sprintSample=await page.waitForFunction(initial=>{
+  const stamina=window.__ashfordQA.snapshot().stamina;
+  return stamina<initial-2?{stamina}:false;
+ },after.stamina,{timeout:10000});
+ const {stamina:sprintLow}=await sprintSample.jsonValue();
  await cdp.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
- const released=await page.evaluate(()=>window.__ashfordQA.snapshot());
- await page.waitForFunction(initial=>window.__ashfordQA.snapshot().stamina>initial+1,released.stamina,{timeout:10000});
+ // CDP and browser round trips can span a full recovery before the next snapshot.
+ await page.waitForFunction(low=>window.__ashfordQA.snapshot().stamina>low+1,sprintLow,{timeout:10000});
  assert(await page.locator(".environment-readout").isVisible(),"Mobile food and water readout missing");
  // The FPS toggle remains usable on small viewports.
  await page.locator("#perf-button").tap();

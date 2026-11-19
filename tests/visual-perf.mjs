@@ -20,6 +20,7 @@ let browser;const errors=[],samples=[];
 try{
  browser=await chromium.launch({headless:true,args:["--no-sandbox","--disable-dev-shm-usage","--enable-webgl","--use-gl=angle","--use-angle=swiftshader"]});
  const page=await browser.newPage({viewport:{width:1120,height:720},deviceScaleFactor:1});
+ await page.addInitScript(()=>localStorage.setItem("ashfordGraphicsV02","balanced"));
  page.on("pageerror",e=>errors.push(e.message));
  await page.goto("http://127.0.0.1:"+server.address().port+"/?__qa=1",{waitUntil:"domcontentloaded",timeout:90000});
  await page.waitForFunction(()=>Boolean(window.__ashfordQA),null,{timeout:60000});
@@ -37,6 +38,7 @@ try{
   await page.evaluate(([x,z])=>window.__ashfordQA.teleport(x,z),[view.x,view.z]);
   await page.waitForTimeout(650);
   const metric=await page.evaluate(()=>window.__ashfordQA.perf());
+  assert.equal(metric.renderTier,"balanced");
   assert(metric.drawCalls>0&&metric.triangles>0,"Blank WebGL scene at "+view.name);
   assert(metric.geometries<190,"Excessive geometry allocations at "+view.name+": "+metric.geometries);
   assert(metric.drawCalls<440,"Draw call budget exceeded at "+view.name+": "+metric.drawCalls);

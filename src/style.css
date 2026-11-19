@@ -158,3 +158,5 @@ button:focus-visible,input:focus-visible { outline:2px solid #f4c994;outline-off
 #hud .missionpanel .eyebrow,#hud #waypoint-distance { color:#e0c28b; }
 #hud .missionpanel h2 { color:#f4f1e7; }
 #hud .weapon-card .weapon-divider { background:#d1a46d; }
+.render-option{display:flex;align-items:center;gap:.65rem;color:#e5ded0;font-size:12px;margin-top:10px;cursor:pointer}
+.render-option input{width:1rem;height:1rem;accent-color:#c7a97a}

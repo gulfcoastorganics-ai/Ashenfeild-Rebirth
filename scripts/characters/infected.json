@@ -1,0 +1,38 @@
+{
+  "kind": "ara-character",
+  "version": 1,
+  "params": {
+    "detail": "low",
+    "rig": "game_lite",
+    "faceBones": false,
+    "faceShapes": false,
+    "speechShapes": false,
+    "eyelashes": "none",
+    "teeth": "none",
+    "tongue": false,
+    "outfit": "none",
+    "shoes": "combat_boots",
+    "bottom": "tattered_pants",
+    "name": "infected",
+    "gender": 1,
+    "age": 0.66,
+    "muscle": 0.38,
+    "weight": 0.34,
+    "hair": "buzz",
+    "facialHair": "none",
+    "skinTint": "#a39d83",
+    "top": "tattered_shirt",
+    "garmentStyles": {
+      "tattered_shirt": {
+        "pattern": "tattered",
+        "color": "#6e6554",
+        "color2": "#242322"
+      },
+      "tattered_pants": {
+        "pattern": "tattered",
+        "color": "#44413a",
+        "color2": "#242322"
+      }
+    }
+  }
+}
