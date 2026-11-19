@@ -12,9 +12,10 @@ const actorsOnly=process.argv.includes("--actors");
 const crowdOnly=process.argv.includes("--crowd");
 const liveCombat=process.argv.includes("--live");
 const fallbackModels=process.argv.includes("--fallback");
+const reversed=process.argv.includes("--reverse");
 const frameCount=Number(process.env.ASHFORD_BENCHMARK_FRAMES??24);
-if(!baselinePath||!["performance","balanced","quality"].includes(setting)||!Number.isInteger(frameCount)||frameCount<12||(liveCombat&&!crowdOnly))throw Error("Usage: node tests/compare-render.mjs <baseline checkout> [performance|balanced|quality] [--indoors|--actors|--crowd [--live]] [--fallback]");
-const outputPath=resolve(currentRoot,"artifacts",`comparison-${setting}${interiorsOnly?"-indoors":actorsOnly?"-actors":crowdOnly?"-crowd":""}${fallbackModels?"-fallback":""}${liveCombat?"-live":""}`);
+if(!baselinePath||!["performance","balanced","quality"].includes(setting)||!Number.isInteger(frameCount)||frameCount<12||(liveCombat&&!crowdOnly))throw Error("Usage: node tests/compare-render.mjs <baseline checkout> [performance|balanced|quality] [--indoors|--actors|--crowd [--live]] [--fallback] [--reverse]");
+const outputPath=resolve(currentRoot,"artifacts",`comparison-${setting}${interiorsOnly?"-indoors":actorsOnly?"-actors":crowdOnly?"-crowd":""}${fallbackModels?"-fallback":""}${liveCombat?"-live":""}${reversed?"-reversed":""}`);
 const viewport={width:1000,height:640};
 const types={".html":"text/html",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",".webp":"image/webp",".glb":"model/gltf-binary"};
 const views=[
@@ -172,9 +173,11 @@ async function capture(browser,root,build){
 await mkdir(outputPath,{recursive:true});
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--disable-dev-shm-usage","--enable-webgl","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
- const before=await capture(browser,resolve(baselinePath),"before");
- const after=await capture(browser,currentRoot,"after");
+ const builds={};
+ for(const build of reversed?["after","before"]:["before","after"]){
+  builds[build]=await capture(browser,build==="before"?resolve(baselinePath):currentRoot,build);
+ }
  await writeFile(resolve(outputPath,"benchmarks.json"),JSON.stringify({viewport,graphics:setting,
   note:"Software rendering. Seeded world and matched views. "+(liveCombat?"Live simulation with scripted keyboard shots.":"Simulation paused during timing.")+" Frame pace and JS callbacks include any browser/driver blocking.",
-  browser:browser.version(),before,after},null,2));
+  browser:browser.version(),order:Object.keys(builds),...builds},null,2));
 }finally{await browser.close();}
