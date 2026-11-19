@@ -26,6 +26,7 @@ const coal=mat(0x21282a), asphalt=mat(0x292c2d), concrete=mat(0x555b57), dust=ma
 const goldMat=new THREE.MeshStandardMaterial({color:0xf1b775,emissive:0x9d5723,emissiveIntensity:.5,roughness:.3});
 const scene=new THREE.Scene();
 const skyTexture=createSky();
+const performanceSky=new THREE.Color(0x565952);
 scene.background=skyTexture;
 scene.backgroundIntensity=.84;
 scene.fog=new THREE.FogExp2(0x746f60,.017);
@@ -274,7 +275,7 @@ function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safeh
  return {frontZ,backZ,left,right};
 }
 function detailedMaterial(column,row,repeatX,repeatY,color,roughness,relief){
- const map=materialTile?.({column,row,repeatX,repeatY,anisotropy:Math.min(renderer.capabilities.getMaxAnisotropy(),8)});
+ const map=materialTile?.({column,row,repeatX,repeatY});
  if(!map)return null;
  const material=new THREE.MeshStandardMaterial({map,color,roughness});
  finishMaterials.push({material,map,relief});
@@ -1281,8 +1282,11 @@ function applyRenderTier(tier){
  renderer.setPixelRatio(Math.min(devicePixelRatio,preset.pixelRatio));
  renderer.shadowMap.enabled=preset.shadows;
  const quality=tier==="quality";
+ scene.background=tier==="performance"?performanceSky:skyTexture;
  scene.environment=quality?skyTexture:null;
+ const anisotropy=quality?Math.min(renderer.capabilities.getMaxAnisotropy(),8):1;
  for(const {material,map,relief} of finishMaterials){
+  if(map.anisotropy!==anisotropy){map.anisotropy=anisotropy;map.needsUpdate=true;}
   const bump=quality?map:null;
   if(material.bumpMap!==bump){material.bumpMap=bump;material.bumpScale=relief;material.needsUpdate=true;}
  }

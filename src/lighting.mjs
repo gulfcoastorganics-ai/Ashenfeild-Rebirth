@@ -9,7 +9,7 @@ export async function loadMaterials(){
    timer=setTimeout(()=>reject(new Error("Material sheet timed out")),3200);
   })]);
  }catch{return null;}finally{clearTimeout(timer);}
- return ({column,row,repeatX=1,repeatY=1,anisotropy=1})=>{
+ return ({column,row,repeatX=1,repeatY=1})=>{
   const tile=document.createElement("canvas");
   tile.width=tile.height=384;
   const ctx=tile.getContext("2d");
@@ -18,7 +18,7 @@ export async function loadMaterials(){
   const texture=new THREE.CanvasTexture(tile);
   texture.colorSpace=THREE.SRGBColorSpace;
   texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
-  texture.repeat.set(repeatX,repeatY);texture.anisotropy=anisotropy;
+  texture.repeat.set(repeatX,repeatY);
   return texture;
  };
 }
