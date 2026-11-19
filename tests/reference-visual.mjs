@@ -5,7 +5,7 @@ import {resolve,extname,sep} from "node:path";
 import assert from "node:assert/strict";
 
 const root=resolve(import.meta.dirname,"..");
-const types={".html":"text/html",".css":"text/css",".js":"text/javascript",".mjs":"text/javascript"};
+const types={".html":"text/html",".css":"text/css",".js":"text/javascript",".mjs":"text/javascript",".webp":"image/webp"};
 const server=createServer(async(req,res)=>{
  try{
   const name=decodeURIComponent((req.url||"/").split("?")[0]);
@@ -40,6 +40,8 @@ try{
  await mkdir(resolve(root,"artifacts"),{recursive:true});
  await page.screenshot({path:resolve(root,"artifacts","v011-reference-clinic.png"),animations:"disabled"});
  const clinic=await page.evaluate(()=>window.__ashfordQA.perf());
+ assert(clinic.materialSheet,"Surface atlas failed to load");
+ assert.equal(clinic.surfaceRelief,false,"Auto mode enabled Quality-only relief");
  assert(clinic.drawCalls>0&&clinic.drawCalls<480,"Clinic render budget exceeded: "+clinic.drawCalls);
  assert(clinic.geometries<190,"Too many geometries: "+clinic.geometries);
  await page.evaluate(()=>window.__ashfordQA.referenceView(-11,-26,0,2));
@@ -56,11 +58,24 @@ try{
  await page.evaluate(()=>window.__ashfordQA.referenceView(-47,-17.8,Math.PI,0,0));
  await page.waitForTimeout(650);
  await page.screenshot({path:resolve(root,"artifacts","v011-safehouse-survivor.png"),animations:"disabled"});
+ await page.locator("#pause-button").click();
+ const graphics=page.locator("#quality-button");
+ for(const mode of ["PERFORMANCE","BALANCED","QUALITY"]){
+  await graphics.click();
+  assert.equal(await graphics.innerText(),"GRAPHICS: "+mode);
+ }
+ await page.locator("#resume").click();
+ await page.evaluate(()=>window.__ashfordQA.referenceView(-48,-24,Math.PI,0));
+ await page.waitForFunction(()=>{
+  const render=window.__ashfordQA.perf();
+  return render.renderTier==="quality"&&render.shadows&&render.surfaceRelief&&render.skyReflections;
+ });
+ await page.screenshot({path:resolve(root,"artifacts","v013-safehouse-quality.png"),animations:"disabled"});
  assert.deepEqual(errors,[]);
- const result={description:"V0.11 realism pass visual validation",environment:"Chromium headless SwiftShader (NOT real GPU)",clinic,market};
+ const result={description:"V0.13 cinematic visual validation",environment:"Chromium headless SwiftShader (CPU rendering)",clinic,market};
  await writeFile(resolve(root,"artifacts","v011-reference-audit.json"),JSON.stringify(result,null,2));
  console.log("REFERENCE CLINIC "+JSON.stringify(clinic));
  console.log("REFERENCE MARKET "+JSON.stringify(market));
- console.log("PASS V0.11 REFERENCE: HUD, functional light toggle, narrow desktop and render budgets");
+ console.log("PASS V0.13 REFERENCE: HUD, light toggle, narrow desktop, render budgets, surface atlas and Quality effects");
 }catch(err){console.error("REFERENCE VISUAL QA FAILED:",err.stack||err);process.exitCode=1;}
 finally{await browser?.close().catch(()=>{});await new Promise(done=>server.close(done));}
