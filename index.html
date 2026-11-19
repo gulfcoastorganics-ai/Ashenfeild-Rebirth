@@ -68,6 +68,8 @@
   <div class="eyebrow">GAME PAUSED</div><h2>Field settings</h2>
   <button id="resume" class="primary">RESUME MISSION</button>
   <button id="quality-button" class="ghost">GRAPHICS: AUTO</button>
+  <label class="render-option" for="fine-surfaces"><input type="checkbox" checked id="fine-surfaces"> Fine surface detail in Quality</label>
+  <label class="render-option" for="scene-grade"><input type="checkbox" checked id="scene-grade"> Scene color grading in Quality</label>
   <label class="volume-setting" for="sound-volume">Sound volume<input id="sound-volume" type="range" min="0" max="100" value="65"></label>
   <button id="camera-motion" class="ghost" type="button" aria-pressed="true">CAMERA MOTION ON</button>
   <button id="restart" class="ghost" type="button">RESTART OPENING ROUTE</button>
@@ -87,6 +89,7 @@ window.addEventListener("error", function () {
  }
 });
 </script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js"}}</script>
 <script type="module" src="./src/game.js"></script>
 </body>
 </html>
