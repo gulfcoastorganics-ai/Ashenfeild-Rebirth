@@ -10,12 +10,16 @@ const setting=process.argv[3]??"performance";
 const interiorsOnly=process.argv.includes("--indoors");
 const actorsOnly=process.argv.includes("--actors");
 const crowdOnly=process.argv.includes("--crowd");
+const routeOnly=process.argv.includes("--route");
+const scavenge=process.argv.includes("--scavenge");
+const encounters=process.argv.includes("--encounters");
 const liveCombat=process.argv.includes("--live");
 const fallbackModels=process.argv.includes("--fallback");
 const reversed=process.argv.includes("--reverse");
 const frameCount=Number(process.env.ASHFORD_BENCHMARK_FRAMES??24);
-if(!baselinePath||!["performance","balanced","quality"].includes(setting)||!Number.isInteger(frameCount)||frameCount<12||(liveCombat&&!crowdOnly))throw Error("Usage: node tests/compare-render.mjs <baseline checkout> [performance|balanced|quality] [--indoors|--actors|--crowd [--live]] [--fallback] [--reverse]");
-const outputPath=resolve(currentRoot,"artifacts",`comparison-${setting}${interiorsOnly?"-indoors":actorsOnly?"-actors":crowdOnly?"-crowd":""}${fallbackModels?"-fallback":""}${liveCombat?"-live":""}${reversed?"-reversed":""}`);
+if(!baselinePath||!["performance","balanced","quality"].includes(setting)||!Number.isInteger(frameCount)||frameCount<12||(liveCombat&&!crowdOnly&&!encounters))throw Error("Usage: node tests/compare-render.mjs <baseline checkout> [performance|balanced|quality] [--route|--indoors|--scavenge|--actors|--crowd|--encounters] [--live] [--fallback] [--reverse]");
+const fixture=interiorsOnly?"indoors":actorsOnly?"actors":routeOnly?"route":scavenge?"scavenge":encounters?"encounters":crowdOnly?"crowd":"";
+const outputPath=resolve(currentRoot,"artifacts",`comparison-${setting}${fixture?"-"+fixture:""}${fallbackModels?"-fallback":""}${liveCombat?"-live":""}${reversed?"-reversed":""}`);
 const viewport={width:1000,height:640};
 const types={".html":"text/html",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",".webp":"image/webp",".glb":"model/gltf-binary"};
 const views=[
@@ -61,6 +65,12 @@ async function capture(browser,root,build){
  const errors=[];
  page.on("pageerror",error=>errors.push(error.message));
  try{
+  // Measure residency once after each window, including on archived baselines.
+  await page.route("**/src/game.js",async route=>{
+   const response=await route.fetch();
+   const source=await response.text();
+   await route.fulfill({response,body:source+"\nwindow.getBenchObjects=()=>{let count=0;scene.traverse(()=>count++);return count;};"});
+  });
   await page.addInitScript(({mode,fallback})=>{
    localStorage.setItem("ashfordGraphicsV02",mode);
    localStorage.setItem("ashfordAdaptiveCharacters","off");
@@ -93,8 +103,11 @@ async function capture(browser,root,build){
    return gl.getParameter(debug?debug.UNMASKED_RENDERER_WEBGL:gl.RENDERER);
   });
   const samples=[];
-  const crowd=[{name:"one-infected",kind:"runner",enemy:true},{name:"six-infected",kind:"runner",enemy:true,crowd:true}];
-  for(const view of interiorsOnly?views.slice(0,2):actorsOnly?actors:crowdOnly?crowd:views){
+  const crowd=[{name:"one-infected",kind:"runner",enemy:true},{name:"six-infected",kind:"runner",enemy:true,extra:["walker","brute","spitter","runner","walker"]}];
+  const fixtures={indoors:views.slice(0,2),route:views.slice(0,4),actors,crowd,
+   scavenge:[{name:"footlocker",x:-44,z:-24,yaw:-Math.PI/2,stage:0}],
+   encounters:[{name:"two-infected",kind:"walker",enemy:true,extra:["runner"]}]};
+  for(const view of fixtures[fixture]??views){
    if(!view.enemy){
     await page.evaluate(({x,z,yaw,stage,facing=yaw})=>window.__ashfordQA.referenceView(x,z,yaw,stage,facing),view);
     if(view.name==="market")await page.waitForFunction(()=>{
@@ -109,7 +122,7 @@ async function capture(browser,root,build){
     const qa=window.__ashfordQA;
     window.setupCombatBenchmark=()=>{
      qa.combatSetup(view.kind??"runner",4.6);
-     if(view.crowd)for(const [index,kind] of ["walker","brute","spitter","runner","walker"].entries())qa.combatAdd(kind,5.2+index*.8);
+     for(const [index,kind] of (view.extra??[]).entries())qa.combatAdd(kind,5.2+index*.8);
     };
     window.setupCombatBenchmark();
    },view);
@@ -144,15 +157,15 @@ async function capture(browser,root,build){
      windows.push({raf,callbacks:window.renderCallbackMs.slice(1),shots,effectFrames});
     }
     return windows;
-   },{sampleCount:interiorsOnly||crowdOnly?3:1,frameCount,liveCombat});
+   },{sampleCount:fixture&&fixture!=="actors"?3:1,frameCount,liveCombat});
    const raf=windows.flatMap(w=>w.raf),callbacks=windows.flatMap(w=>w.callbacks);
-   const render=await page.evaluate(()=>window.__ashfordQA.perf());
+   const render=await page.evaluate(()=>({...window.__ashfordQA.perf(),sceneObjects:window.getBenchObjects()}));
    assert.equal(render.pixelRatio,setting==="performance"?.85:1);
    assert(render.drawCalls>0&&render.triangles>0);
    await page.screenshot({path:resolve(outputPath,build+"-"+view.name+".png"),animations:"disabled"});
    const frame=stats(raf);
    const sample={view,drawCalls:render.drawCalls,triangles:render.triangles,geometries:render.geometries,
-    textures:render.textures,activePointLights:render.pointLightsActive,pixelRatio:render.pixelRatio,
+    textures:render.textures,activePointLights:render.pointLightsActive,pixelRatio:render.pixelRatio,sceneObjects:render.sceneObjects,
     visibleSkinnedActors:render.characters?.filter(actor=>actor.shown).length,
     fps:1000/frame.meanMs,frame,windows:windows.map(w=>({...stats(w.raf),shots:w.shots,effectFrames:w.effectFrames})),renderCallback:stats(callbacks),frameSamplesMs:raf};
    if(liveCombat)assert(windows.every(w=>w.shots>0),"Live combat sample did not fire the pistol");

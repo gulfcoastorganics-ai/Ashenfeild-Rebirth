@@ -166,6 +166,18 @@ try{
  await route.waitForFunction(()=>window.__ashfordQA.snapshot().ended,null,{timeout:15000});
  assert(await route.locator("#end-title").isVisible(),"Ending screen not visible");
  assert((await route.locator("#end-title").innerText()).includes("FIRST NIGHT"));
+ await route.locator("#continue-exploring").click();
+ assert.equal((await snapshot()).ended,false,"Free roam did not resume the game");
+ assert.equal((await snapshot()).completed,true,"Original campaign ending was discarded");
+ const completed=await route.evaluate(()=>JSON.parse(localStorage.getItem("ashfordRebirthV01")));
+ assert.equal(completed.completed,true);
+ assert.equal(completed.waveKills,4);
+ await route.reload({waitUntil:"domcontentloaded"});
+ await route.locator("#loader").waitFor({state:"detached",timeout:45000});
+ assert.match(await route.locator("#start-button").innerText(),/CONTINUE EXPLORING/);
+ await route.locator("#start-button").click();
+ assert.equal((await snapshot()).completed,true);
+ assert.equal((await snapshot()).waveKills,4);
  report("Scripted market–patrol–clinic mission transitions","PASS","9 objectives, NPC dialogue, pickups, defense and victory");
  console.log("BROWSER QA PASS: smoke and scripted mission progression complete");
 

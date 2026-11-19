@@ -3,7 +3,7 @@ on:
   push:
     branches: [reconstruction-prototype]
   pull_request:
-    branches: [reconstruction-prototype, feature/v014-character-overhaul]
+    branches: [reconstruction-prototype, feature/v014-character-overhaul, feature/v015-production]
 concurrency:
   group: reconstruction-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -38,6 +38,8 @@ jobs:
         run: npm run test:mobile
       - name: Combat input and infected attack integration test
         run: npm run test:combat
+      - name: Scavenging, shelter, persistence and touch integration test
+        run: npm run test:sandbox
       - name: Attach browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
