@@ -20,6 +20,7 @@ let browser;
 try{
  browser=await chromium.launch({headless:true,args:["--no-sandbox","--disable-dev-shm-usage","--enable-webgl","--use-gl=angle","--use-angle=swiftshader"]});
  const page=await browser.newPage({viewport:{width:1200,height:720},deviceScaleFactor:1});
+ await page.addInitScript(()=>localStorage.setItem("ashfordAdaptiveCharacters","off"));
  const errors=[];page.on("pageerror",e=>errors.push(e.message));
  await page.goto("http://127.0.0.1:"+server.address().port+"/?__qa=1",{waitUntil:"domcontentloaded",timeout:90000});
  await page.waitForFunction(()=>Boolean(window.__ashfordQA),null,{timeout:60000});
@@ -63,7 +64,19 @@ try{
  await page.evaluate(()=>window.__ashfordQA.referenceView(-47,-17.8,Math.PI,0,0));
  await page.waitForTimeout(650);
  await page.screenshot({path:resolve(root,"artifacts","v011-safehouse-survivor.png"),animations:"disabled"});
+ await page.evaluate(()=>window.__ashfordQA.referenceView(-54,-15.15,0,0));
+ await page.waitForFunction(()=>window.__ashfordQA.perf().cameraLength<.45);
+ await page.evaluate(()=>window.__ashfordQA.referenceView(-48,-24,Math.PI,0));
+ await page.waitForFunction(()=>window.__ashfordQA.perf().cameraLength>.85);
  await page.locator("#pause-button").click();
+ await page.waitForFunction(()=>window.__ashfordQA.perf().audio.active===false);
+ await page.locator("#sound-volume").evaluate(input=>{
+  input.value="0";input.dispatchEvent(new Event("input",{bubbles:true}));
+ });
+ assert(await page.evaluate(()=>window.__ashfordQA.perf().audio.muted&&localStorage.getItem("ashfordVolume")==="0"));
+ await page.locator("#camera-shoulder").click();
+ assert.equal(await page.evaluate(()=>localStorage.getItem("ashfordShoulder")),"left");
+ await page.locator("#camera-shoulder").click();
  const graphics=page.locator("#quality-button");
  for(const mode of ["PERFORMANCE","BALANCED","QUALITY"]){
   await graphics.click();
@@ -112,6 +125,9 @@ try{
  assert(!await page.evaluate(()=>window.__ashfordQA.perf().characters.some(r=>r.kind==="walker")),"Removed infected rig was retained");
  await page.keyboard.press("x");
  await page.waitForFunction(()=>window.__ashfordQA.perf().characters.some(r=>r.kind==="player"&&r.pose==="dodge"));
+ const burst=await page.evaluate(()=>window.__ashfordQA.effectFixture());
+ for(const [type,active] of Object.entries(burst.active))assert.equal(active,burst.limits[type],type+" pool cap");
+ await page.waitForFunction(()=>Object.values(window.__ashfordQA.perf().effects).every(count=>count===0));
  assert.deepEqual(errors,[]);
  await page.close();
  const fallback=await browser.newPage({viewport:{width:640,height:480},deviceScaleFactor:1});
@@ -132,6 +148,6 @@ try{
  await writeFile(resolve(root,"artifacts","v0131-reference-audit.json"),JSON.stringify(result,null,2));
  console.log("REFERENCE CLINIC "+JSON.stringify(clinic));
  console.log("REFERENCE MARKET "+JSON.stringify(market));
- console.log("PASS V0.14 REFERENCE: render budgets, avatar loading, pose and pause, tier cycling, rig removal and failed-download fallback");
+ console.log("PASS V0.15 REFERENCE: avatar and fallback, paused mixer, camera obstruction and recovery, mute and shoulder settings, tier cycling and bounded effects");
 }catch(err){console.error("REFERENCE VISUAL QA FAILED:",err.stack||err);process.exitCode=1;}
 finally{await browser?.close().catch(()=>{});await new Promise(done=>server.close(done));}

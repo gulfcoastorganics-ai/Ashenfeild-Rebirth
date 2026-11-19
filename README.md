@@ -4,6 +4,18 @@
 
 A small, original-code third-person 3D browser survival game built from the remembered *Dead Zone: Aftermath* opening-route brief while the original Sites source is inaccessible. This repo deliberately keeps the reconstruction on its own branch to prevent accidental confusion with the original game's commit history.
 
+## V0.15.2 — Combat, camera and atmosphere
+
+Auto graphics now scale character detail separately from render resolution.
+Combat has a tighter shoulder view, pooled weapon effects and directional damage
+feedback. Infected investigate noise, search after losing sight and space out on
+approach. The safehouse, market, street and clinic have different soundscapes.
+Use **V** to swap shoulders and **Alt** or the controller's left trigger to aim.
+The pause menu controls camera motion, detail and volume.
+
+See the [production report](docs/V015-PRODUCTION-REPORT.md) for validation,
+comparison captures and the remaining gaps.
+
 ## V0.11 — Realism pass across the opening route
 
 The survivor and infected use sculpted facial meshes with cheek, brow and jaw

@@ -3,7 +3,7 @@ on:
   push:
     branches: [reconstruction-prototype]
   pull_request:
-    branches: [reconstruction-prototype]
+    branches: [reconstruction-prototype, feature/v014-character-overhaul]
 concurrency:
   group: reconstruction-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true

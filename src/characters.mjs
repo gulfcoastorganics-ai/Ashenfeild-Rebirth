@@ -101,6 +101,7 @@ export function createCharacterLibrary(){
    model.position.y=-asset.foot*scale*size[1];
    model.rotation.y=Math.PI;
    let skeleton;
+   const parts=[];
    model.traverse(node=>{
     if(!node.isSkinnedMesh)return;
     // One glTF skin backs all of this avatar's material primitives. The clone
@@ -108,6 +109,7 @@ export function createCharacterLibrary(){
     if(skeleton)node.bind(skeleton,node.bindMatrix);
     else skeleton=node.skeleton;
     node.castShadow=true;node.receiveShadow=true;
+    parts.push(node);
     node.material=materialsFor(kind,node);
     node.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,asset.height*.48,0),asset.height*1.10);
    });
@@ -115,6 +117,7 @@ export function createCharacterLibrary(){
    let current,pose;
    const handle={
     kind,model,height:targetHeight*size[1],equipment:null,
+    castShadow(enabled){for(const part of parts)part.castShadow=enabled;},
     step(command,dt){
      const clip=clips.get(command.name)??clips.get("idle");
      const timed=Number.isFinite(command.phase);
