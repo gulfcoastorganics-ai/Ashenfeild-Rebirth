@@ -11,6 +11,7 @@
 <body>
 <div id="game"></div>
 <div id="damage-flash"></div>
+<div id="damage-direction" aria-hidden="true" hidden></div>
 <div id="vignette"></div>
 <div id="crosshair" aria-hidden="true"><span></span><span></span></div>
 <div class="hud" id="hud" hidden>
@@ -71,8 +72,10 @@
   <label class="render-option" for="fine-surfaces"><input type="checkbox" checked id="fine-surfaces"> Fine surface detail in Quality</label>
   <label class="render-option" for="scene-grade"><input type="checkbox" checked id="scene-grade"> Scene color grading in Quality</label>
   <label class="render-option" for="detailed-characters"><input type="checkbox" checked id="detailed-characters"> Detailed character models</label>
+  <label class="render-option" for="adaptive-characters"><input type="checkbox" checked id="adaptive-characters"> Adaptive character detail in Auto</label>
   <label class="volume-setting" for="sound-volume">Sound volume<input id="sound-volume" type="range" min="0" max="100" value="65"></label>
   <button id="camera-motion" class="ghost" type="button" aria-pressed="true">CAMERA MOTION ON</button>
+  <button id="camera-shoulder" class="ghost" type="button" title="Swap shoulder (V)">CAMERA SHOULDER RIGHT</button>
   <button id="restart" class="ghost" type="button">RESTART OPENING ROUTE</button>
   <p class="save-note">Progress saves in this browser.</p>
  </div>

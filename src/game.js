@@ -8,6 +8,10 @@ import {createSky,lightPool,loadMaterials} from "./lighting.mjs";
 import {createSurfaceLibrary} from "./surfaces.mjs";
 import {createCharacterLibrary} from "./characters.mjs";
 import {infectedPose,playerPose} from "./character-state.mjs";
+import {createQualityGovernor,animationInterval} from "./adaptive.mjs";
+import {cameraArm,cameraClearance,damageSide} from "./camera.mjs";
+import {createBrain,sense,separation} from "./infected-ai.mjs";
+import {createEffectPool, effectLimits} from "./effects.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -69,10 +73,14 @@ $("game").appendChild(renderer.domElement);
 const hemi=new THREE.HemisphereLight(0xacbcc9,0x544732,1.34);scene.add(hemi);
 const moon=new THREE.DirectionalLight(0xffd8ab,1.92);moon.position.set(-34,32,42);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0003;moon.shadow.normalBias=.037;scene.add(moon,moon.target);
 const world=new THREE.Group();scene.add(world);
+const feedback=createEffectPool(world);
+const noiseEvents=[];
+let nextNoise=0,nextEnemy=0,attackSlot=0,visualHold=0,damageTime=0,aimUntil=0;
+const viewProjection=new THREE.Matrix4(),actorFrustum=new THREE.Frustum(),actorSphere=new THREE.Sphere(new THREE.Vector3(),1.8);
 const obstacles=[],enemies=[],effects=[],localLights=[],streetDetails=[],finishMaterials=[];
 const interiors=ENTRANCES.map(()=>new THREE.Group());
 const characters=createCharacterLibrary(),civilianActors=new Map();
-let detailedCharacters=true;
+let detailedCharacters=true,adaptiveCharacters=true;
 let visibleInterior=-2;
 let lightBudgetElapsed=0;
 let playerVisual,playerShadow,marker,markerRing,markerDiamond;
@@ -98,7 +106,9 @@ const stages=[
  {title:"Hold back the infected",desc:"Protect the clinic. Defeat four infected during the assault.",point:{x:45,z:-13},kind:"combat"},
  {title:"Secure the clinic entrance",desc:"Return to the front doors and secure the clinic gate.",point:{x:44,z:-15},kind:"interact",name:"CLINIC GATE"}
 ];
-const keys={},touch={x:0,y:0,sprint:false};
+const keys={},touch={x:0,y:0,sprint:false},padInput={x:0,y:0,sprint:false,aim:false};
+const padButtons=[];
+let gamepadsAllowed=typeof navigator.getGamepads==="function";
 let cameraYaw=Math.PI,cameraPitch=.39,lastPointer=null,activeDialog=false;
 const graphicsModes=["auto","performance","balanced","quality"];
 const graphicsPresets={
@@ -106,12 +116,15 @@ const graphicsPresets={
  balanced:{pixelRatio:1,shadows:true,particles:true},
  quality:{pixelRatio:1.6,shadows:true,particles:true}
 };
-let qualityMode="auto",renderTier="balanced",qualityFrames=0,qualitySeconds=0;
+const governor=createQualityGovernor(!renderer.capabilities.isWebGL2||matchMedia("(any-pointer: coarse)").matches||(navigator.deviceMemory??8)<=4);
+let qualityMode="auto",renderTier="balanced";
 let dustParticles;
+const unreliableFixtures=[];
 let gaitPhase=0,gaitBlend=0;
 const solidMeshes=[];
-const cameraRay=new THREE.Raycaster();
-const cameraPivot=V(0,0,0),cameraDesired=V(0,0,0),cameraDirection=V(0,0,0),cameraLook=V(0,0,0),cameraHits=[];
+const cameraBounds=[];
+const cameraPivot=V(0,0,0),cameraDesired=V(0,0,0),cameraLook=V(0,0,0);
+let shoulderSide=1,shoulderBlend=1,cameraLength=1,aimBlend=0;
 const fieldFlashlight=new THREE.SpotLight(0xe0e6c4,4.2,24,Math.PI/6,.52,1.8);
 fieldFlashlight.castShadow=false;fieldFlashlight.visible=false;scene.add(fieldFlashlight);
 const fieldFlashlightTarget=new THREE.Object3D();scene.add(fieldFlashlightTarget);
@@ -570,7 +583,7 @@ function makeWorld(){
  });
  box(-7,.52,-29,1.3,1,1.3,parcelMaterial());
  addLight(-15,3.65,-27,0xffbf82,14,21);
- addLight(-5,4,-21,0xd2dfc7,5.2,15);
+ unreliableFixtures.push({lamp:addLight(-5,4,-21,0xd2dfc7,5.2,15),power:5.2,phase:1.2});
  for(let z of [-27,-34]){const fixture=box(-11,4.70,z,2.35,.14,.31,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  finishInterior(1,marketStart);
  // Clinic
@@ -682,7 +695,8 @@ function makeWorld(){
  const wardFixture=matUnique(0xc5d6ca);
  wardFixture.emissive.setHex(0x9ac1c1);wardFixture.emissiveIntensity=.7;
  for(const x of [38,48])for(const z of [-34,-27])box(x,4.74,z,2.8,.13,.43,wardFixture);
- addLight(44,4.14,-29.5,0xe6f1d6,12,21);addLight(54,3.32,-33.5,0xb7d0d7,4.5,15);
+ addLight(44,4.14,-29.5,0xe6f1d6,12,21);
+ unreliableFixtures.push({lamp:addLight(54,3.32,-33.5,0xb7d0d7,4.5,15),power:4.5,phase:6.1});
  const ward=label("WARD B / TRIAGE",4.6,.36,"#414238","#d5cdb5",50);ward.position.set(triageX,1.56,triageZ+1.02);world.add(ward);
  finishInterior(2,clinicStart);
  // Patrol car, street debris and reflective safety cones form a readable landmark.
@@ -1013,7 +1027,8 @@ function spawnEnemy(type,x,z,ambush=false){
  const spec=INFECTED[type]||INFECTED.walker;
  enemies.push({type,mesh:c,x,z,hp:spec.health,max:spec.health,speed:spec.speed,
   cd:rand(.5,1.2),phase:rand(0,10),dead:false,death:0,ambush,visualSpeed:0,visualStrike:0,
-  attackIntent:null,windup:0,hitFlash:0,stagger:0,route:[],routeTimer:rand(.05,.45),routeTarget:{x:NaN,z:NaN}});
+  order:nextEnemy++,brain:createBrain(type,x,z,state.time+nextEnemy%5*.037),poseElapsed:0,impactSide:0,
+  attackIntent:null,windup:0,hitFlash:0,stagger:0,route:[],routeTimer:rand(.05,.45)});
 }
 function requestAvatar(actor,kind){
  const info=actor.userData;
@@ -1047,9 +1062,12 @@ function showRig(actor,visible){
  rig.model.visible=visible;
  for(const part of fallback)part.visible=!visible;
 }
+function useDetailedModels(){
+ return detailedCharacters&&(!adaptiveCharacters||(qualityMode==="auto"?governor.state().rigs:qualityMode!=="performance"));
+}
 function updateCharacterBudget(){
  if(!playerVisual||!state.started)return;
- if(!detailedCharacters){
+ if(!useDetailedModels()){
   showRig(playerVisual,false);
   for(const actor of civilianActors.values())showRig(actor,false);
   for(const enemy of enemies)showRig(enemy.mesh,false);
@@ -1060,6 +1078,7 @@ function updateCharacterBudget(){
   const near=Math.hypot(actor.position.x-state.x,actor.position.z-state.z)<24;
   if(near)requestAvatar(actor,kind);
   showRig(actor,near);
+  actor.userData.rig?.castShadow(renderTier!=="performance"&&near);
  }
  const radius=renderTier==="performance"?17:renderTier==="balanced"?24:33;
  const count=renderTier==="performance"?4:renderTier==="balanced"?6:9;
@@ -1070,12 +1089,13 @@ function updateCharacterBudget(){
   const near=nearby.has(enemy);
   if(near)requestAvatar(enemy.mesh,enemy.type);
   showRig(enemy.mesh,near);
+  enemy.mesh.userData.rig?.castShadow(renderTier!=="performance"&&near&&dist(enemy,state)<(renderTier==="quality"?20:11));
  }
 }
 function animateCharacters(dt,playing){
  const playerRig=playerVisual.userData.rig;
  if(playerRig?.model.visible){
-  if(playing||activeDialog||state.health<=0){
+  if((playing&&visualHold<=0)||activeDialog||state.health<=0){
    if(state.health<=0)playerFall=Math.min(1,playerFall+dt/1.25);
    playerRig.step(playerPose(state,playerSpeed,playerTurn,playerFall,activeDialog),dt);
   }
@@ -1090,7 +1110,14 @@ function animateCharacters(dt,playing){
  if(playing)for(const enemy of enemies){
   const rig=enemy.mesh.userData.rig;
   if(!rig?.model.visible)continue;
-  rig.step(infectedPose(enemy),dt);
+  actorSphere.center.set(enemy.x,1.25,enemy.z);
+  const interval=animationInterval({distance:dist(enemy,state),tier:renderTier,
+   visible:actorFrustum.intersectsSphere(actorSphere),urgent:enemy.dead||Boolean(enemy.attackIntent)||enemy.hitFlash>0});
+  enemy.poseElapsed+=dt;
+  if(enemy.poseElapsed<interval)continue;
+  rig.step(infectedPose(enemy),Math.min(.25,enemy.poseElapsed));
+  rig.model.rotation.z=enemy.dead?0:(enemy.impactSide??0)*.14*enemy.hitFlash/.18;
+  enemy.poseElapsed=0;
   if(rig.throat){
    const charge=enemy.attackIntent?clamp(1-enemy.windup/enemy.attackIntent.windup,0,1):0;
    rig.throat.scale.set(.081+.05*charge,.103+.05*charge,.060+.045*charge);
@@ -1120,7 +1147,10 @@ function interact(){
  if(!state.started||state.paused)return;
  const q=stages[state.stage];if(q.kind!=="interact"){toast("FOLLOW THE WAYPOINT");return;}
  if(dist(pos(),q.point)>4){toast("MOVE CLOSER TO INTERACT");return;}
- if(state.stage===3||state.stage===4)state.visualInteract=.55;
+ if(state.stage===3||state.stage===4){
+  state.visualInteract=.55;
+  feedback.impact(q.point.x,.85,q.point.z,0,0,"pickup",renderTier,cameraMotion);
+ }
  if(state.stage===2)showDialogue("MARA","You're still breathing? Good. The water's in the back aisle. Get it before the others come. A patrol car stopped outside the clinic road—might be something useful there.",advance);
  else if(state.stage===3){state.supplies=1;state.inventory.water+=2;state.inventory.food+=2;toast("SUPPLIES RECOVERED + WATER + FOOD");tone(900,.2);advance();}
  else if(state.stage===4){state.hasGun=true;state.weapon="pistol";state.ammo=36;toast("PISTOL RECOVERED · 36 ROUNDS");tone(920,.24);advance();}
@@ -1132,7 +1162,35 @@ function startWave(){state.waveStarted=true;state.waveKills=0;state.waveTimer=0;
  toast("CLINIC UNDER ATTACK");}
 function victory(){state.ended=true;state.paused=true;$("end-label").textContent="OPENING ROUTE CLEARED";$("end-title").textContent="FIRST NIGHT SURVIVED.";$("end-message").textContent="You reached the ward, found allies, and secured Ashford Clinic. This is the end of the reconstruction opening slice.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(680,.6);}
 function gameOver(){state.ended=true;state.paused=true;$("end-label").textContent="SIGNAL LOST";$("end-title").textContent="YOU DID NOT SURVIVE.";$("end-message").textContent="The dead claimed another survivor. Return to the start and try again.";$("gameover").classList.add("visible");localStorage.removeItem("ashfordRebirthV01");tone(125,.6,"sawtooth",.08);}
-function takeDamage(amount){if(state.qaNoDamage||state.hitTime>.05||state.dodgeIFrames>0)return;state.health=clamp(state.health-amount,0,100);state.hitTime=.45;$("damage-flash").style.opacity=.75;sound.burst(180,.17,.26,0,"lowpass");tone(105,.21,"sine",.15);setTimeout(()=>$("damage-flash").style.opacity=0,130);if(state.health<=0)gameOver();}
+function takeDamage(amount,source){
+ if(state.qaNoDamage||state.hitTime>.05||state.dodgeIFrames>0)return;
+ state.health=clamp(state.health-amount,0,100);state.hitTime=.45;
+ damageTime=.30;
+ state.cameraKick=Math.max(state.cameraKick,.14);
+ const flash=$("damage-flash");flash.style.opacity=cameraMotion?.63:.34;
+ const cue=$("damage-direction");
+ if(source){
+  const side=damageSide(cameraYaw,source.x-state.x,source.z-state.z);
+  cue.dataset.side=side;cue.textContent=({left:"◀ LEFT",right:"RIGHT ▶",front:"▲ FRONT",rear:"▼ BEHIND"})[side];
+  cue.hidden=false;
+ }
+ sound.burst(180,.17,.26,0,"lowpass");tone(105,.21,"sine",.15);
+ if(state.health<=0)gameOver();
+}
+function emitNoise(radius){
+ const event={id:++nextNoise,x:state.x,z:state.z,radius,time:state.time};
+ if(noiseEvents.length===8)noiseEvents.shift();
+ noiseEvents.push(event);
+}
+function heardBy(enemy){
+ for(let i=noiseEvents.length-1;i>=0;i--){
+  const event=noiseEvents[i];
+  if(state.time-event.time>2||event.id<=enemy.brain.heard)break;
+  const dx=event.x-enemy.x,dz=event.z-enemy.z,range=event.radius*enemy.brain.profile.hearing;
+  if(dx*dx+dz*dz<range*range)return event;
+ }
+ return null;
+}
 function confirmHit(killed=false){
  state.hitConfirm=killed?.38:.22;
  const marker=$("crosshair");marker.classList.remove("hit","kill");void marker.offsetWidth;
@@ -1143,43 +1201,44 @@ function dodge(){
  if(!canDodge(state.stamina,state.dodgeCooldown,state.dodgeTime>0)){tone(160,.08);return;}
  const forward={x:-Math.sin(cameraYaw),z:-Math.cos(cameraYaw)};
  const right={x:Math.cos(cameraYaw),z:-Math.sin(cameraYaw)};
- const mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
- const mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
+ const mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x+padInput.x;
+ const mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y+padInput.y;
  const v=normalize2D(right.x*mx+forward.x*mz,right.z*mx+forward.z*mz,{x:-forward.x,z:-forward.z});
  state.stamina-=DODGE.cost;state.dodgeTime=DODGE.duration;state.dodgeCooldown=DODGE.cooldown;
  state.dodgeIFrames=DODGE.invulnerability;state.dodgeDir=v;state.meleeAnim=0;
+ state.angle=Math.atan2(-v.x,-v.z);
  sound.burst(460,.15,.22);
 }
 function melee(){
  if(state.attackTime>0||!state.started||state.paused)return;
  state.attackTime=WEAPONS.crowbar.cooldown;state.meleeAnim=WEAPONS.crowbar.cooldown;
- sound.burst(830,.15,.21);
+ sound.burst(790,.115,.18);emitNoise(10);
  const p=pos(),facing=aimDirection();
  const target=chooseTarget(p,{x:facing.x,z:facing.z},enemies,"crowbar",obstacles);
  if(target)hurtEnemy(target,WEAPONS.crowbar.damage,"crowbar");
- const slash=mesh(new THREE.TorusGeometry(1.15,.045,5,25,Math.PI*.86),
-  new THREE.MeshBasicMaterial({color:0xe9d6b6,transparent:true,opacity:.44}),
-  state.x+facing.x*.8,1.5,state.z+facing.z*.8,world);
- slash.rotation.set(.35,-state.angle,0);
- effects.push({mesh:slash,life:.18,total:.18,kind:"fade",opacity:.48});
+ feedback.strike(state.x+facing.x*.8,1.54,state.z+facing.z*.8,state.angle,renderTier);
 }
 function shoot(){
  if(!state.started||state.paused||state.shootTime>0)return;
  if(!state.hasGun){toast("FIND A FIREARM FIRST");return;}
  if(state.ammo<=0){toast("OUT OF AMMO — USE MELEE");tone(180,.05);return;}
  state.ammo--;state.shootTime=WEAPONS.pistol.cooldown;
- state.pistolAnim=.28;state.cameraKick=Math.max(state.cameraKick,.18);
+ state.pistolAnim=.28;state.cameraKick=Math.max(state.cameraKick,.18);aimUntil=state.time+.9;emitNoise(34);
  sound.burst(2300,.145,.58,0,"lowpass");tone(107,.13,"triangle",.24);
  const facing=aimDirection();
  const target=chooseTarget(pos(),{x:facing.x,z:facing.z},enemies,"pistol",obstacles);
  const src=V(state.x+facing.x*.7,1.75,state.z+facing.z*.7);
  const end=target?V(target.x,1.7,target.z):src.clone().addScaledVector(facing,24);
  if(target)hurtEnemy(target,WEAPONS.pistol.damage,"pistol");
- const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([src,end]),
-  new THREE.LineBasicMaterial({color:0xf9d38e,transparent:true,opacity:.95}));
- world.add(line);effects.push({mesh:line,life:.085,total:.085,kind:"fade",opacity:.76});
- const flash=sphere(src.x,src.y,src.z,.23,new THREE.MeshBasicMaterial({color:0xffde8c,transparent:true,opacity:1}));
- effects.push({mesh:flash,life:.09,total:.09,kind:"fade"});
+ else{
+  const hit=cameraClearance(src,end,cameraBounds,.015);
+  if(hit<1){
+   end.lerp(src,1-hit);
+   feedback.impact(end.x,end.y,end.z,-facing.x,-facing.z,"stone",renderTier,cameraMotion);
+   sound.burst(1420,.09,.11,0,"highpass");
+  }
+ }
+ feedback.shot(src,end,renderTier);
 }
 function hurtEnemy(e,damage,weapon="pistol"){
  if(e.dead||e.hp<=0)return;
@@ -1187,8 +1246,16 @@ function hurtEnemy(e,damage,weapon="pistol"){
  e.hitFlash=.18;e.stagger=e.type==="brute"?.13:.22;
  if(e.type!=="brute"&&e.attackIntent){e.attackIntent=null;e.cd=Math.max(e.cd,.35);}
  const dx=e.x-state.x,dz=e.z-state.z;
+ const distance=Math.max(.01,Math.hypot(dx,dz));
  const pan=clamp((Math.cos(cameraYaw)*dx-Math.sin(cameraYaw)*dz)/9,-.82,.82);
- sound.burst(weapon==="pistol"?630:370,.124,.28,pan);
+ e.impactSide=(Math.sin(e.mesh.rotation.y)*dz-Math.cos(e.mesh.rotation.y)*dx)/distance;
+ feedback.impact(e.x,1.65,e.z,dx/distance,dz/distance,"flesh",renderTier,cameraMotion);
+ if(weapon==="crowbar"){
+  if(cameraMotion)visualHold=.045;
+  state.cameraKick=Math.max(state.cameraKick,.093);
+  sound.burst(310,.15,.22,pan,"lowpass");
+  tone(173,.068,"triangle",.055,pan);
+ }else sound.burst(665,.115,.24,pan);
  confirmHit(hit.killed);
  if(!hit.killed)return;
  e.dead=true;e.death=1.7;e.attackIntent=null;state.kills++;
@@ -1201,7 +1268,7 @@ function launchSpit(e,p){
  const d=Math.max(.01,dist(e,p));
  const orb=sphere(e.x,1.65,e.z,.20,new THREE.MeshBasicMaterial({color:0x98e364,transparent:true}));
  effects.push({mesh:orb,life:3,total:3,kind:"spit",
-  vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8,damage:INFECTED.spitter.rangedDamage});
+  vx:(p.x-e.x)/d*8,vz:(p.z-e.z)/d*8,damage:INFECTED.spitter.rangedDamage,source:{x:e.x,z:e.z}});
  tone(225,.16,"triangle",.035);
 }
 function removeEnemy(enemy){
@@ -1231,22 +1298,34 @@ function updateEnemies(dt){
   e.visualStrike=Math.max(0,e.visualStrike-dt);
   const oldX=e.x,oldZ=e.z;
   const d=dist(p,e),attacking=Boolean(e.attackIntent);
-  if(d<38&&d>1.2&&state.started&&!state.paused&&e.stagger<=0&&!attacking){
-   e.routeTimer-=dt;
-   if(e.routeTimer<=0||dist(p,e.routeTarget)>3){
-    e.route=findRoute(e,p,obstacles,{step:1.75,clearance:.45,maxVisited:4400});
-    if(!e.route.length)e.route=findRoute(e,chaseGoal(e,p),obstacles,{step:1.75,clearance:.45,maxVisited:2200});
-    e.routeTimer=rand(.85,1.45);e.routeTarget={x:p.x,z:p.z};
+  const facing=d>0?(-(p.x-e.x)*Math.sin(e.mesh.rotation.y)-(p.z-e.z)*Math.cos(e.mesh.rotation.y))/d:1;
+  sense(e.brain,{now:state.time,player:p,actor:e,distance:d,facing,alarm:e.ambush,heard:heardBy(e),
+   sight:()=>!lineBlocked(e.x,e.z,p.x,p.z,.10)});
+  e.routeTimer-=dt;
+  const brain=e.brain,target={x:brain.x,z:brain.z};
+  const pursuing=brain.mode==="pursue";
+  const standOff=e.type==="spitter"&&brain.visible&&d>3.3&&d<11;
+  const idle=brain.mode==="idle"||brain.mode==="suspicious";
+  if(d<48&&(!pursuing||d>1.2)&&e.stagger<=0&&!attacking&&!standOff&&!idle){
+   const straight=brain.visible&&pursuing&&d<16;
+   if(!straight&&e.routeTimer<=0){
+    const goal=pursuing?chaseGoal(e,target):target;
+    e.route=findRoute(e,goal,obstacles,{step:1.75,clearance:.45,maxVisited:3500});
+    e.routeTimer=.72+(e.order%5)*.12;
    }
-   while(e.route.length>1&&dist(e,e.route[0])<.6)e.route.shift();
-   const goal=e.route[0]||chaseGoal(e,p),gd=Math.max(.01,dist(e,goal)),speed=e.speed*dt;
-   const dx=(goal.x-e.x)/gd,dz=(goal.z-e.z)/gd;
-   let nx=e.x+dx*speed,nz=e.z+dz*speed;
-   if(!blocked(nx,nz,.42)&&!lineBlocked(e.x,e.z,nx,nz,.42)){e.x=nx;e.z=nz;}
-   else if(!blocked(nx,e.z,.42)){e.x=nx;}
-   else if(!blocked(e.x,nz,.42)){e.z=nz;}
-   else e.routeTimer=0;
-   e.mesh.rotation.y=Math.atan2(-dx,-dz);
+   while(e.route.length&&dist(e,e.route[0])<.6)e.route.shift();
+   const goal=straight?target:e.route[0]||(pursuing?chaseGoal(e,target):target);
+   const deltaX=goal.x-e.x,deltaZ=goal.z-e.z,gd=Math.hypot(deltaX,deltaZ);
+   if(gd>.22){
+    const away=separation(e,enemies),speed=e.speed*dt*(pursuing?1:brain.profile.pace);
+    const dx=deltaX/gd+away.x,dz=deltaZ/gd+away.z;
+    const divisor=Math.max(1,Math.hypot(dx,dz));
+    const nx=e.x+dx/divisor*speed,nz=e.z+dz/divisor*speed;
+    if(!blocked(nx,nz,.42)){e.x=nx;e.z=nz;}
+    else if(!blocked(nx,e.z,.42))e.x=nx;
+    else if(!blocked(e.x,nz,.42))e.z=nz;
+    e.mesh.rotation.y=Math.atan2(-dx,-dz);
+   }
   }
   // All attacks now have a telegraphed anticipation phase and are
   // validated against current distance / cover when the strike resolves.
@@ -1257,12 +1336,14 @@ function updateEnemies(dt){
     const intent=e.attackIntent;e.attackIntent=null;e.cd=intent.cooldown;e.visualStrike=.32;
     if(attackStillValid(intent,newDist)&&!lineBlocked(e.x,e.z,p.x,p.z,.1)){
      if(intent.kind==="spit")launchSpit(e,p);
-     else takeDamage(intent.damage);
+     else takeDamage(intent.damage,e);
     }
    }
   }else if(newDist<=(e.type==="spitter"?SPIT_RANGE:ATTACK_RANGE)&&e.cd<=0&&e.stagger<=0){
    const intent=chooseInfectedAction(e.type,newDist);
-   if(intent&&!lineBlocked(e.x,e.z,p.x,p.z,.1)){e.attackIntent=intent;e.windup=intent.windup;}
+   if(intent&&state.time>=attackSlot&&!lineBlocked(e.x,e.z,p.x,p.z,.1)){
+    e.attackIntent=intent;e.windup=intent.windup;attackSlot=state.time+.20;
+   }
   }
   const stride=Math.sin(e.phase),looms=e.type==="brute",runs=e.type==="runner";
   e.visualSpeed=Math.hypot(e.x-oldX,e.z-oldZ)/dt;
@@ -1274,7 +1355,7 @@ function updateEnemies(dt){
   const windup=e.attackIntent?Math.sin(Math.PI*(1-e.windup/e.attackIntent.windup)):.0;
   const recoil=e.hitFlash/.18;
   torso.rotation.x=(runs?-.30:0)+windup*(looms?.42:e.type==="spitter"?-.55:.23)+recoil*.24;
-  torso.rotation.z=stride*(looms?.044:.065)-recoil*.12;
+  torso.rotation.z=stride*(looms?.044:.065)+(e.impactSide??0)*recoil*.15;
   head.rotation.x=-windup*.12+recoil*.20;
   head.rotation.z=neckTilt-stride*.027;
   if(windup>0){
@@ -1331,11 +1412,11 @@ function aimDirection(){
 }
 function chaseGoal(enemy,target){return chooseChaseGoal(enemy,target);}
 function updatePlayer(dt){
- let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x;
- let mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y;
+ let mx=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+touch.x+padInput.x;
+ let mz=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-touch.y+padInput.y;
  const len=Math.hypot(mx,mz);if(len>1){mx/=len;mz/=len;}
  const moving=Math.hypot(mx,mz)>.06;
- const sprint=(keys.ShiftLeft||keys.ShiftRight||touch.sprint)&&state.stamina>2&&moving;
+ const sprint=(keys.ShiftLeft||keys.ShiftRight||touch.sprint||padInput.sprint)&&state.stamina>2&&moving;
  const forward=V(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw)),right=V(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));
  const previousX=state.x,previousZ=state.z;
  let dx=0,dz=0;
@@ -1372,6 +1453,7 @@ function updatePlayer(dt){
    leftStep=!leftStep;
    const room=ENTRANCES.findIndex(box=>state.x>box.left&&state.x<box.right&&state.z>box.back&&state.z<box.front);
    sound.footstep(room===0?"wood":room>0?"tile":"asphalt",sprint,leftStep);
+   if(sprint)emitNoise(13);
   }
  }
  playerSprint=stepping&&sprint;
@@ -1401,12 +1483,13 @@ function updateEffects(dt){
  for(let i=effects.length-1;i>=0;i--){const e=effects[i];e.life-=dt;
  if(e.kind==="spit"){const nx=e.mesh.position.x+e.vx*dt,nz=e.mesh.position.z+e.vz*dt;
   if(blocked(nx,nz,.22)){e.life=0;}else{e.mesh.position.x=nx;e.mesh.position.z=nz;
-    if(dist({x:nx,z:nz},pos())<.8){takeDamage(e.damage||10);e.life=0;}}}
+    if(dist({x:nx,z:nz},pos())<.8){takeDamage(e.damage||10,e.source);e.life=0;}}}
  if(e.mesh.material&&"opacity"in e.mesh.material)e.mesh.material.opacity=clamp(e.life/e.total,0,1)*(e.opacity??.9);
  if(e.life<=0){world.remove(e.mesh);if(e.mesh.geometry&&e.mesh.geometry!==unitSphere&&e.mesh.geometry!==unitCylinder&&e.mesh.geometry!==unitCube)e.mesh.geometry.dispose();if(e.mesh.material&&!materialCacheHas(e.mesh.material))e.mesh.material.dispose();effects.splice(i,1);}
  }
 }
 function hud(){
+ $("hud").dataset.lowHealth=String(state.health<28);
  const pct=(id,v)=>$(id).style.width=clamp(v,0,100)+"%";
  pct("hp-bar",state.health);pct("st-bar",state.stamina);pct("th-bar",state.thirst);pct("hu-bar",state.hunger);
  $("hp-num").textContent=Math.ceil(state.health)+" / 100";$("st-num").textContent=Math.ceil(state.stamina)+" / 100";
@@ -1438,37 +1521,37 @@ function drawMap(){
  ctx.strokeStyle="#ebdbb6";ctx.beginPath();ctx.moveTo(px(state.x),pz(state.z));ctx.lineTo(px(state.x)-Math.sin(state.angle)*9,pz(state.z)-Math.cos(state.angle)*9);ctx.stroke();
  ctx.strokeStyle="#778984";ctx.lineWidth=2;ctx.strokeRect(1,1,w-2,h-2);
 }
-function constrainCamera(position){
- cameraDirection.subVectors(position,cameraPivot);
- const distance=cameraDirection.length();
- if(distance===0)return;
- cameraDirection.divideScalar(distance);
- cameraRay.set(cameraPivot,cameraDirection);cameraRay.near=0;cameraRay.far=distance;
- cameraHits.length=0;
- cameraRay.intersectObjects(solidMeshes,false,cameraHits);
- if(cameraHits.length)position.copy(cameraPivot).addScaledVector(cameraDirection,Math.max(0,cameraHits[0].distance-.22));
-}
 function updateCamera(dt){
  const yawX=Math.sin(cameraYaw),yawZ=Math.cos(cameraYaw);
  const wideFrame=clamp((camera.aspect-.65)/.55,0,1);
- const shoulder=.30+.60*wideFrame;
  const motion=cameraMotion&&state.started&&!state.paused;
+ const aiming=state.started&&!state.paused&&state.hasGun&&(state.time<aimUntil||keys.AltLeft||keys.AltRight||lastPointer?.button===2||padInput.aim);
+ aimBlend+=((aiming?1:0)-aimBlend)*(1-Math.exp(-dt*11));
+ shoulderBlend+=(shoulderSide-shoulderBlend)*(1-Math.exp(-dt*11));
  viewSprint+=((motion&&playerSprint?1:0)-viewSprint)*(1-Math.exp(-dt*6));
- const fov=58+viewSprint*3.4;
+ const fov=58+viewSprint*3.4-aimBlend*6;
  if(Math.abs(fov-camera.fov)>.017){camera.fov=fov;camera.updateProjectionMatrix();}
- const reach=5+.23*viewSprint;
+ const shoulder=(.30+.60*wideFrame+aimBlend*.17)*shoulderBlend;
+ const reach=5+.23*viewSprint-aimBlend*.65;
  const horizontal=Math.cos(cameraPitch)*reach;
- const vertical=Math.sin(cameraPitch)*reach+(motion?state.cameraKick*.85:0);
+ const vertical=Math.sin(cameraPitch)*reach+(motion?state.cameraKick*.66:0);
  cameraPivot.set(state.x,1.82,state.z);
  cameraDesired.set(state.x+yawX*horizontal+yawZ*shoulder,vertical+1.54,state.z+yawZ*horizontal-yawX*shoulder);
- camera.position.lerp(cameraDesired,1-Math.exp(-dt*8));
- // Constrain the smoothed position so the camera cannot linger across a wall.
- constrainCamera(camera.position);
- const visibleOffset=clamp((camera.position.x-state.x)*yawZ-(camera.position.z-state.z)*yawX,-shoulder,shoulder)*.84;
+ const clearance=cameraClearance(cameraPivot,cameraDesired,cameraBounds);
+ cameraLength=cameraArm(cameraLength,clearance,dt);
+ cameraDesired.lerp(cameraPivot,1-cameraLength);
+ camera.position.lerp(cameraDesired,1-Math.exp(-dt*(clearance<.999?19:8)));
+ const safety=cameraClearance(cameraPivot,camera.position,cameraBounds);
+ if(safety<1)camera.position.lerp(cameraPivot,1-safety);
+ const lateral=(camera.position.x-state.x)*yawZ-(camera.position.z-state.z)*yawX;
+ const visibleOffset=clamp(lateral,-Math.abs(shoulder),Math.abs(shoulder))*.84;
  const bob=motion?Math.cos(gaitPhase*2)*gaitBlend*.023:0;
  cameraLook.set(state.x+yawZ*visibleOffset,2.17+bob,state.z-yawX*visibleOffset);
  camera.lookAt(cameraLook);
- playerVisual.visible=camera.position.distanceToSquared(cameraPivot)>1.15**2;
+ playerVisual.visible=camera.position.distanceToSquared(cameraPivot)>1.10**2;
+ camera.updateMatrixWorld();
+ viewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
+ actorFrustum.setFromProjectionMatrix(viewProjection);
  fieldFlashlight.position.set(state.x,2.22,state.z);
  fieldFlashlightTarget.position.set(state.x-Math.sin(cameraYaw)*12,1.55,state.z-Math.cos(cameraYaw)*12);
  fieldFlashlightTarget.updateMatrixWorld();
@@ -1483,7 +1566,7 @@ function currentMetrics(){
  geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
  pointLightsActive:localLights.filter(l=>l.visible&&l.parent.visible).length,pointLightsTotal:localLights.length,
  pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
- quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.14",photoAssets:surfaces.status(),skinnedActors:characters.status().filter(rig=>rig.shown).length};
+ quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.15.2",photoAssets:surfaces.status(),skinnedActors:characters.status().filter(rig=>rig.shown).length};
 }
 function updatePerfReadout(){
  if($("perf-panel").hidden)return;
@@ -1498,7 +1581,7 @@ function exportPerformanceReport(){
   metrics:currentMetrics(),framesMs:[...qaFrameMs]};
  const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob);
- const link=document.createElement("a");link.href=url;link.download="ashford-v014-performance.json";
+ const link=document.createElement("a");link.href=url;link.download="ashford-v015-performance.json";
  document.body.appendChild(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1500);
  toast("LOCAL PERFORMANCE REPORT SAVED");
@@ -1542,23 +1625,20 @@ function applyRenderTier(tier){
  updateSceneGrade(roomAtPlayer());
  dustParticles.visible=preset.particles;
  updateLightBudget();
- qualityFrames=0;qualitySeconds=0;
+ governor.reset();
 }
 function applyQuality(mode){
  qualityMode=graphicsModes.includes(mode)?mode:"auto";
- applyRenderTier(qualityMode==="auto"?"balanced":qualityMode);
+ applyRenderTier(qualityMode==="auto"?governor.reset(true).tier:qualityMode);
  $("quality-button").textContent="GRAPHICS: "+qualityMode.toUpperCase();
  try{localStorage.setItem("ashfordGraphicsV02",qualityMode);}catch(e){}
 }
 function sampleGraphics(elapsed){
  if(qualityMode!=="auto"||!state.started||state.paused||state.ended||document.hidden)return;
- qualityFrames++;qualitySeconds+=elapsed;
- const windowSeconds=renderTier==="balanced"?5:12;
- if(qualitySeconds<windowSeconds)return;
- const fps=qualityFrames/qualitySeconds;
- if(renderTier==="balanced"&&fps<27)applyRenderTier("performance");
- if(renderTier==="performance"&&fps>=52)applyRenderTier("balanced");
- qualityFrames=0;qualitySeconds=0;
+ const profile=governor.sample(elapsed);
+ if(!profile)return;
+ if(profile.tier!==renderTier)applyRenderTier(profile.tier);
+ else updateCharacterBudget();
 }
 function saveGame(){try{localStorage.setItem("ashfordRebirthV01",JSON.stringify({stage:state.stage,x:state.x,z:state.z,health:state.health,stamina:state.stamina,thirst:state.thirst,hunger:state.hunger,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,inventory:state.inventory,kills:state.kills,waveKills:state.waveKills}));}catch(e){}}
 function loadGame(){
@@ -1587,6 +1667,31 @@ function inventory(){
 function showPack(){if(!state.started||state.ended)return;closeAll();state.paused=true;inventory();$("pack-modal").classList.add("visible");}
 function pause(){if(!state.started||state.ended)return;if($("pause-modal").classList.contains("visible")){resume();return;}closeAll();state.paused=true;$("pause-modal").classList.add("visible");saveGame();}
 function resume(){closeAll();state.paused=false;}
+function pollGamepad(dt){
+ if(!gamepadsAllowed)return;
+ let pad;
+ try{for(const device of navigator.getGamepads())if(device?.mapping==="standard"){pad=device;break;}}
+ catch{gamepadsAllowed=false;}
+ if(!pad){padInput.x=padInput.y=0;padInput.sprint=padInput.aim=false;padButtons.length=0;return;}
+ const axis=value=>Math.abs(value??0)>.18?value:0;
+ const held=i=>Boolean(pad.buttons[i]?.pressed);
+ const pressed=i=>held(i)&&!padButtons[i];
+ if(pressed(9)&&!activeDialog)pause();
+ if(state.started&&!state.paused&&!state.ended){
+  padInput.x=axis(pad.axes[0]);padInput.y=-axis(pad.axes[1]);
+  padInput.sprint=held(4)||held(10);padInput.aim=held(6);
+  cameraYaw=clamp(cameraYaw-axis(pad.axes[2])*dt*2.7,-Math.PI*40,Math.PI*40);
+  cameraPitch=clamp(cameraPitch+axis(pad.axes[3])*dt*1.7,.32,1.05);
+  if(pressed(0))dodge();
+  if(pressed(2))interact();
+  if(pressed(5))melee();
+  if(pressed(7))shoot();
+ }else{
+  padInput.x=padInput.y=0;padInput.sprint=padInput.aim=false;
+  if(activeDialog&&pressed(2))$("dialogue-next").click();
+ }
+ for(const i of [0,2,5,7,9])padButtons[i]=held(i);
+}
 function hardReset(){localStorage.removeItem("ashfordRebirthV01");location.reload();}
 function start(){state.started=true;state.paused=false;$("intro").classList.remove("visible");$("hud").hidden=false;
  $("mobile-controls").hidden=!touchLayout.matches;
@@ -1596,7 +1701,7 @@ function controls(){
  $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;$("light-button").onclick=toggleFlashlight;
  $("export-perf").onclick=exportPerformanceReport;
  const volume=$("sound-volume"),motion=$("camera-motion");
- const fineControl=$("fine-surfaces"),gradeControl=$("scene-grade"),modelControl=$("detailed-characters");
+ const fineControl=$("fine-surfaces"),gradeControl=$("scene-grade"),modelControl=$("detailed-characters"),adaptiveControl=$("adaptive-characters");
  try{
   const savedVolume=localStorage.getItem("ashfordVolume");
   if(savedVolume!==null)volume.value=savedVolume;
@@ -1605,16 +1710,24 @@ function controls(){
   fineSurfaces=localStorage.getItem("ashfordFineSurfaces")!=="off";
   sceneGrade=localStorage.getItem("ashfordSceneGrade")!=="off";
   detailedCharacters=localStorage.getItem("ashfordDetailedCharacters")!=="off";
+  adaptiveCharacters=localStorage.getItem("ashfordAdaptiveCharacters")!=="off";
+  shoulderSide=localStorage.getItem("ashfordShoulder")==="left"?-1:1;shoulderBlend=shoulderSide;
   const checkpoint=JSON.parse(localStorage.getItem("ashfordRebirthV01")||"null");
   if(Number.isInteger(checkpoint?.stage)&&checkpoint.stage>=0&&checkpoint.stage<stages.length){
    $("start-button").firstChild.textContent="CONTINUE CAMPAIGN ";
   }
  }catch{}
  fineControl.checked=fineSurfaces;gradeControl.checked=sceneGrade;
+ adaptiveControl.checked=adaptiveCharacters;
+ adaptiveControl.onchange=()=>{
+  adaptiveCharacters=adaptiveControl.checked;updateCharacterBudget();
+  try{localStorage.setItem("ashfordAdaptiveCharacters",adaptiveCharacters?"on":"off");}catch{}
+ };
  modelControl.checked=detailedCharacters;
  modelControl.onchange=()=>{
   detailedCharacters=modelControl.checked;
-  updateCharacterBudget();
+  if(detailedCharacters&&adaptiveCharacters){adaptiveControl.checked=false;adaptiveControl.onchange();}
+  else updateCharacterBudget();
   try{localStorage.setItem("ashfordDetailedCharacters",detailedCharacters?"on":"off");}catch{}
  };
  fineControl.onchange=()=>{
@@ -1636,6 +1749,13 @@ function controls(){
   cameraMotion=!cameraMotion;showMotionSetting();
   try{localStorage.setItem("ashfordCameraMotion",cameraMotion?"on":"off");}catch{}
  };
+ const shoulder=$("camera-shoulder");
+ function updateShoulder(){shoulder.textContent=shoulderSide===1?"CAMERA SHOULDER RIGHT":"CAMERA SHOULDER LEFT";}
+ shoulder.onclick=()=>{
+  shoulderSide*=-1;updateShoulder();
+  try{localStorage.setItem("ashfordShoulder",shoulderSide===1?"right":"left");}catch{}
+ };
+ updateShoulder();
  $("resume").onclick=resume;$("restart").onclick=hardReset;$("end-restart").onclick=hardReset;
  $("quality-button").onclick=()=>applyQuality(graphicsModes[(graphicsModes.indexOf(qualityMode)+1)%graphicsModes.length]);
  try{qualityMode=localStorage.getItem("ashfordGraphicsV02")||"auto";}catch(e){}
@@ -1663,6 +1783,7 @@ function controls(){
  }
  if(e.repeat)return;
  if(e.code==="Escape"){if($("pack-modal").classList.contains("visible")){resume();return;}if(activeDialog)return;pause();}
+ if(e.code==="KeyV"&&state.started&&!state.paused){shoulder.click();return;}
  if(e.code==="KeyI"){if($("pack-modal").classList.contains("visible"))resume();else showPack();}
  if(e.code==="KeyE")interact();if(e.code==="KeyF")shoot();if(e.code==="KeyP")togglePerf();if(e.code==="KeyL")toggleFlashlight();if(e.code==="KeyX")dodge();if(e.code==="Space")melee();
  });
@@ -1687,7 +1808,7 @@ function controls(){
  function clearInput(){
   for(const key in keys)keys[key]=false;
   releaseJoy({pointerId:joyId});releaseSprint({pointerId:sprintId});lastPointer=null;
-  qualityFrames=0;qualitySeconds=0;
+  governor.reset();
  }
  addEventListener("blur",clearInput);
  touchLayout.addEventListener("change",()=>{
@@ -1703,7 +1824,7 @@ function controls(){
 function installLocalQA(){
  if(location.hostname!=="127.0.0.1"||new URLSearchParams(location.search).get("__qa")!=="1")return;
  Object.defineProperty(window,"__ashfordQA",{configurable:false,value:Object.freeze({
-  snapshot(){return {stage:state.stage,health:state.health,stamina:state.stamina,dodgeCooldown:state.dodgeCooldown,dodgeTime:state.dodgeTime,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,cameraYaw,inventory:{...state.inventory},enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,hp:e.hp,max:e.max,ambush:e.ambush,intent:e.attackIntent?.kind||null,windup:e.windup}))};},
+  snapshot(){return {stage:state.stage,health:state.health,stamina:state.stamina,dodgeCooldown:state.dodgeCooldown,dodgeTime:state.dodgeTime,ammo:state.ammo,hasGun:state.hasGun,supplies:state.supplies,waveKills:state.waveKills,ended:state.ended,x:state.x,z:state.z,cameraYaw,inventory:{...state.inventory},enemies:enemies.filter(e=>!e.dead).map(e=>({type:e.type,x:e.x,z:e.z,hp:e.hp,max:e.max,ambush:e.ambush,intent:e.attackIntent?.kind||null,windup:e.windup,behavior:e.attackIntent?"attack":e.visualStrike>0?"recover":e.brain.mode}))};},
   perf(){const frames=[...qaFrameMs].sort((a,b)=>a-b);const n=frames.length,avg=n?frames.reduce((x,y)=>x+y,0)/n:0;
    return {sampleCount:n,averageFPS:avg?1000/avg:null,p50FrameMs:n?frames[Math.floor(n*.5)]:null,p95FrameMs:n?frames[Math.min(n-1,Math.floor(n*.95))]:null,
      drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
@@ -1711,12 +1832,22 @@ function installLocalQA(){
      quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,materialSheet:Boolean(materialTile),
      surfaceRelief:finishMaterials.some(({material})=>Boolean(material.bumpMap)),skyReflections:scene.environment===skyTexture,
      photoAssets:surfaces.status(),marketShelf:Boolean(marketShelf?.visible&&interiors[1].visible),sceneGrade:gradeZone,visibleInterior,
-     characters:characters.status()};
+     characters:characters.status(),adaptive:governor.state(),effects:feedback.status(),audio:sound.status(),cameraLength};
   },
   noDamage(on){state.qaNoDamage=Boolean(on);},
+  effectFixture(){
+   const start=new THREE.Vector3(state.x,1.3,state.z),end=start.clone().add(new THREE.Vector3(0,0,4));
+   for(let i=0;i<100;i++){
+    feedback.shot(start,end,renderTier);
+    feedback.strike(start.x,start.y,start.z,state.angle,renderTier);
+    feedback.impact(end.x,end.y,end.z,0,-1,"stone",renderTier,cameraMotion);
+   }
+   return {active:feedback.status(),limits:effectLimits};
+  },
   combatSetup(type="walker",range=6){
    if(!Object.hasOwn(INFECTED,type)||!Number.isFinite(range)||range<1||range>12)throw Error("Invalid combat fixture");
    for(const e of enemies)removeEnemy(e);enemies.length=0;
+   noiseEvents.length=0;attackSlot=0;
    state.stage=7;state.waveStarted=true;state.waveKills=0;state.waveTimer=-1000;
    state.hasGun=true;state.ammo=90;state.health=100;state.qaNoDamage=true;
    state.x=0;state.z=0;state.angle=Math.PI;cameraYaw=Math.PI;
@@ -1749,6 +1880,9 @@ function animate(){
  // don't slow player movement or tunnel through thin walls.
  const elapsed=Math.max(.001,clock.getDelta());
  const frameDt=Math.min(elapsed,.25);
+ visualHold=Math.max(0,visualHold-elapsed);
+ feedback.step(frameDt);
+ if(!document.hidden)pollGamepad(frameDt);
  const playing=state.started&&!state.paused&&!state.ended;
  if(playing){
   qaFrameMs.push(elapsed*1000);if(qaFrameMs.length>180)qaFrameMs.shift();
@@ -1767,9 +1901,18 @@ function animate(){
  const room=roomAtPlayer();
  updateInteriorVisibility(room);
  updateSceneGrade(room);
- sound.ambience(room>=0,state.started&&!state.paused&&!state.ended&&!document.hidden);
+ sound.ambience(room,playing&&!document.hidden,frameDt,state.health);
  lightBudgetElapsed+=frameDt;
  if(lightBudgetElapsed>=.38){updateLightBudget();lightBudgetElapsed=0;}
+ for(const {lamp,power,phase} of unreliableFixtures){
+  const tick=(state.time+phase)%17;
+  lamp.intensity=power*(renderTier!=="performance"&&cameraMotion&&playing&&tick<.43?.79+.20*Math.abs(Math.sin(tick*23)):1);
+ }
+ if(damageTime>0){
+  damageTime=Math.max(0,damageTime-elapsed);
+  $("damage-flash").style.opacity=Math.min(1,damageTime/.19)*(cameraMotion?.63:.34);
+  if(damageTime===0)$("damage-direction").hidden=true;
+ }
  animateCharacters(frameDt,playing);
  renderer.render(scene,camera);
  perfPanelElapsed+=elapsed;if(perfPanelElapsed>.9){updatePerfReadout();perfPanelElapsed=0;}
@@ -1781,8 +1924,11 @@ try{
  if(textile){packCloth.map.dispose();packCloth.dispose();packCloth=textile;}
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);playerShadow=attachContactShadow(world,state.x,state.z);
  createNPC("mara",-14,-27,Math.PI);createNPC("vale",48.9,-30.75,Math.PI);createNPC("guard",40.2,-31.1,Math.PI*.85);
- updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();world.updateMatrixWorld(true);updateCamera(1);animate();
+ updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();
+ world.updateMatrixWorld(true);
+ for(const mesh of solidMeshes)cameraBounds.push(new THREE.Box3().setFromObject(mesh));
+ updateCamera(1);animate();
  void surfaces.loadColors();
- if(detailedCharacters)void characters.preload();
+ if(useDetailedModels())void characters.preload();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}

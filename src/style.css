@@ -160,3 +160,14 @@ button:focus-visible,input:focus-visible { outline:2px solid #f4c994;outline-off
 #hud .weapon-card .weapon-divider { background:#d1a46d; }
 .render-option{display:flex;align-items:center;gap:.65rem;color:#e5ded0;font-size:12px;margin-top:10px;cursor:pointer}
 .render-option input{width:1rem;height:1rem;accent-color:#c7a97a}
+
+/* Cardinal damage cues remain legible without relying on tint or animation. */
+#damage-direction{position:fixed;z-index:3;pointer-events:none;left:50%;top:36%;transform:translateX(-50%);font:800 .68rem/1.2 system-ui,sans-serif;letter-spacing:.14em;color:#ffebd2;background:#20100ce0;border:1px solid #b68966;padding:.37rem .58rem;white-space:nowrap}
+#damage-direction[hidden]{display:none}
+#damage-direction[data-side="left"]{left:34%;top:50%}
+#damage-direction[data-side="right"]{left:66%;top:50%}
+#damage-direction[data-side="rear"]{top:63%}
+#hud[data-low-health="true"] .health{box-shadow:inset 0 0 0 1px #ffc38c}
+#hud[data-low-health="true"] #hp-num::before{content:"! ";color:#fbd4a4}
+#mobile-actions button:active{outline:2px solid #ffe4b0;outline-offset:-3px}
+@media (prefers-reduced-motion:reduce){#damage-flash{transition:none}#damage-direction{animation:none}}
