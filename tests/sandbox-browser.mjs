@@ -164,9 +164,9 @@ try{
  assert.equal((await snap(encounter)).ammo,before-1);
  await encounter.waitForFunction(()=>window.__ashfordQA.snapshot().enemies.filter(e=>e.encounter==="market").some(e=>e.hp<e.max)||
   window.__ashfordQA.snapshot().enemies.filter(e=>e.encounter==="market").length<2,null,{timeout:6000});
- await encounter.evaluate(()=>window.__ashfordQA.profile(true));
- await encounter.waitForTimeout(1400);
+ await encounter.waitForFunction(()=>window.__ashfordQA.profile(true).simulation.samples>=12,null,{timeout:18000});
  const profile=await encounter.evaluate(()=>window.__ashfordQA.profile(false));
+ assert(profile.simulation.samples>=12,"Encounter profiling produced no usable samples");
  await writeFile(resolve(artifacts,"v016-encounter-profile.json"),JSON.stringify(profile,null,2)+"\n");
  console.log("SANDBOX PASS two-member natural encounter, active checkpoint reload and real pistol hit");
  assert.deepEqual(errors,[]);

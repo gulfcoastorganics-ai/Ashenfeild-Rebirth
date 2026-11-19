@@ -46,3 +46,7 @@ It also exercises a naturally scheduled two-infected encounter and a narrow
 touch viewport. Local captures and the sample encounter timing profile appear
 in `artifacts/v016-*`. For matched frame-timing commands, see the
 [benchmark instructions](V016-PERFORMANCE.md).
+
+The local checks covered 36 deterministic tests and all eight browser
+suites. WebGL smoke also verified leaving the ending screen for free
+exploration and reopening the completed checkpoint after another reload.
