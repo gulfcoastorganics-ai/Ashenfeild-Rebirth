@@ -87,7 +87,7 @@ export function createAudio(){
   footstep(surface,sprinting,left){
    const step=footsteps[surface],pan=left?-.10:.10,strength=sprinting?1.25:1;
    burst(step.frequency*(.85+vary()*.3),.126,step.volume*strength,pan);
-   tone(step.ring,.097,"sine",.064*strength,pan);
+   tone(step.ring*(sprinting?.86:.94),sprinting?.114:.103,"sine",.073*strength,pan);
   }
  };
 }

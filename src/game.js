@@ -5,6 +5,7 @@ import {DODGE,canDodge,normalize2D,summarizeFrames} from "./survival.mjs";
 import {carBody,faceGeometry,floorboards,masonry,sidewalkTexture} from "./art.mjs";
 import {createAudio} from "./audio.mjs";
 import {createSky,lightPool,loadMaterials} from "./lighting.mjs";
+import {createSurfaceLibrary} from "./surfaces.mjs";
 
 /* Ashford Rebirth: wholly original reconstruction. Not recovered Sites v7.1 source. */
 const $ = id => document.getElementById(id);
@@ -31,6 +32,15 @@ scene.background=skyTexture;
 scene.backgroundIntensity=.84;
 scene.fog=new THREE.FogExp2(0x746f60,.017);
 let materialTile;
+const surfaces=createSurfaceLibrary();
+let fineSurfaces=true,sceneGrade=true,gradeZone,marketShelf=null,marketShelfRequested=false;
+const sceneGrades={
+ neutral:{exposure:1.21,sky:0xacbcc9,ground:0x544732},
+ street:{exposure:1.14,sky:0xa8bcc7,ground:0x504b40},
+ safehouse:{exposure:1.27,sky:0xc2bdb3,ground:0x564334},
+ market:{exposure:1.23,sky:0xb8c6b9,ground:0x5e4939},
+ clinic:{exposure:1.28,sky:0xa4c5d2,ground:0x434f47}
+};
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,210);
 function createRenderer(){
  try{return new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});}
@@ -55,7 +65,7 @@ renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 $("game").appendChild(renderer.domElement);
 const hemi=new THREE.HemisphereLight(0xacbcc9,0x544732,1.34);scene.add(hemi);
-const moon=new THREE.DirectionalLight(0xffd8ab,1.92);moon.position.set(-34,32,42);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0003;moon.shadow.normalBias=.037;scene.add(moon);
+const moon=new THREE.DirectionalLight(0xffd8ab,1.92);moon.position.set(-34,32,42);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);moon.shadow.camera.left=-70;moon.shadow.camera.right=70;moon.shadow.camera.top=60;moon.shadow.camera.bottom=-60;moon.shadow.bias=-.0003;moon.shadow.normalBias=.037;scene.add(moon,moon.target);
 const world=new THREE.Group();scene.add(world);
 const obstacles=[],enemies=[],effects=[],localLights=[],streetDetails=[],finishMaterials=[];
 let lightBudgetElapsed=0;
@@ -169,11 +179,41 @@ function sphere(x,y,z,r,material,group=world){const m=mesh(unitSphere,material,x
 function addLight(x,y,z,color,intensity,distance){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);world.add(l);localLights.push(l);return l;}
 function updateLightBudget(){
  const facadeRange=renderTier==="performance"?37:renderTier==="balanced"?57:90;
+ // Track the nearby scene in Balanced so distant casters stay out of the shadow pass.
+ const offsetX=renderTier==="balanced"?Math.round(state.x/4)*4:0;
+ const offsetZ=renderTier==="balanced"?Math.round(state.z/4)*4:0;
+ moon.target.position.set(offsetX,0,offsetZ);
+ moon.position.set(offsetX-34,32,offsetZ+42);
  for(const {x,z,group} of streetDetails)group.visible=Math.hypot(x-state.x,z-state.z)<facadeRange;
  for(const l of localLights){
   const limit=Math.max(24,l.distance+12);
   l.visible=Math.hypot(l.position.x-state.x,l.position.z-state.z)<limit;
  }
+ const nearMarket=Math.hypot(state.x+11,state.z+26)<29;
+ if(marketShelf)marketShelf.visible=nearMarket;
+ if(nearMarket&&!marketShelfRequested){
+  marketShelfRequested=true;
+  void loadMarketShelf();
+ }
+}
+
+async function loadMarketShelf(){
+ try{
+  const {GLTFLoader}=await import("./vendor/loaders/GLTFLoader.js");
+  const {scene:model}=await new GLTFLoader().loadAsync(new URL("../assets/market-shelf.glb",import.meta.url).href);
+  model.updateMatrixWorld(true);
+  const bounds=new THREE.Box3().setFromObject(model);
+  const dimensions=bounds.getSize(new THREE.Vector3());
+  if(bounds.isEmpty()||!Number.isFinite(dimensions.y)||dimensions.y<=0)return;
+  const center=bounds.getCenter(new THREE.Vector3());
+  const scale=Math.min(2.65/dimensions.y,1.9/Math.max(dimensions.x,dimensions.z));
+  model.scale.setScalar(scale);
+  model.position.set(-10.25-center.x*scale,.071-bounds.min.y*scale,-36.65-center.z*scale);
+  model.traverse(node=>{if(node.isMesh){node.receiveShadow=true;node.castShadow=false;}});
+  model.visible=Math.hypot(state.x+11,state.z+26)<29;
+  marketShelf=model;
+  world.add(model);
+ }catch{}
 }
 function label(text,w=9,h=1.9,bg="#121a1c",fg="#e3c18b",size=50){
  const c=document.createElement("canvas");c.width=1024;c.height=256;const ctx=c.getContext("2d");ctx.fillStyle=bg;ctx.fillRect(0,0,1024,256);
@@ -265,6 +305,8 @@ function house({cx,cz,w,d,frontGap=6,color=brick,doorX=cx,back=true,theme="safeh
  const hardwood=theme==="safehouse"?detailedMaterial(0,0,w/7,d/4.9,0xe3dbc7,.80,.036):null;
  const tile=hardwood??matUnique(0xffffff);
  if(!hardwood)tile.map=theme==="clinic"?referenceClinicFloor():theme==="safehouse"?floorboards(w,d):interiorFloorTexture(w,d,theme);
+ if(theme==="safehouse")surfaces.register("wood_floor_worn",tile,w/3.7,d/3.7,0xc2b6a2,.61);
+ else surfaces.register("interior_tiles",tile,w/3.8,d/3.8,theme==="clinic"?0xa0b4b3:0xb8aa8d,.59);
  // Lift interior finish above the base world ground to eliminate coplanar depth fighting.
  box(cx,.057,cz,w,.028,d,tile);
  if(back)wall(cx,backZ,w,.7,4.9,color);
@@ -291,7 +333,21 @@ function marketWindowMaterial(){
  ctx.fillStyle=grime;ctx.fillRect(0,0,256,256);
  ctx.fillStyle="rgba(158,191,183,.15)";
  ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(90,0);ctx.lineTo(235,256);ctx.lineTo(159,256);ctx.fill();
+ ctx.lineWidth=1.2;ctx.strokeStyle="rgba(197,201,179,.52)";
+ ctx.beginPath();ctx.moveTo(171,96);ctx.lineTo(157,117);ctx.lineTo(169,146);ctx.lineTo(162,165);ctx.moveTo(157,117);ctx.lineTo(131,113);
+ ctx.moveTo(157,117);ctx.lineTo(158,87);ctx.lineTo(146,60);ctx.moveTo(157,117);ctx.lineTo(183,119);ctx.lineTo(203,105);ctx.stroke();
  return new THREE.MeshStandardMaterial({map,roughness:.48,metalness:.15});
+}
+function parcelMaterial(){
+ const map=proceduralSurface(0x9d805c,608,1,1);
+ const ctx=map.image.getContext("2d");
+ ctx.fillStyle="rgba(63,44,27,.54)";ctx.fillRect(118,0,24,256);
+ ctx.fillStyle="rgba(196,165,118,.55)";ctx.fillRect(122,0,15,256);
+ ctx.fillStyle="#aaa18c";ctx.fillRect(151,39,78,57);
+ ctx.fillStyle="#4b4639";ctx.font="bold 12px sans-serif";ctx.fillText("DRY GOODS",158,55);
+ for(let i=0;i<16;i++)ctx.fillRect(159+i*4,69,1+(i%3===0),13);
+ ctx.fillStyle="rgba(75,58,40,.55)";ctx.fillRect(4,5,248,3);ctx.fillRect(4,248,248,3);
+ return new THREE.MeshStandardMaterial({map,roughness:.93});
 }
 function clinicCeiling(){
  const ceiling=wornSurface(0x464940,155,5,4);
@@ -315,6 +371,8 @@ function ceilingPanel(x,z,width,depth,tint){
 function dressSafehouse(){
  const plaster=detailedMaterial(1,0,4,1,0xa6a18c,.94,.045)??masonry("#706c59",574,5,1);
  const stud=mat(0x534134),timber=detailedMaterial(0,0,2,1,0x9b876d,.86,.023)??masonry("#654c38",588,2,1);
+ surfaces.register("painted_plaster_wall",plaster,5,1.2,0x9a907c,.67);
+ surfaces.register("wood_floor_worn",timber,1.6,1,0x93765a,.56);
  ceilingPanel(-49,-26,24.4,22.4,plaster);
  for(const z of [-33,-25,-17])box(-49,4.76,z,24.5,.24,.23,stud);
  box(-49,2.43,-37.10,24.25,4.78,.04,plaster);
@@ -364,7 +422,12 @@ function dressSafehouse(){
  floorWash.receiveShadow=false;
  attachContactShadow(world,-53.1,-17.5,.082,3.44,1.78);
  attachContactShadow(world,-41.65,-18.1,.083,2.87,1.82);
-
+ const frame=mat(0x49433a,.65,.36),bedding=wornSurface(0x766c51,646,2,1);
+ box(-58.7,.44,-21.1,1.5,.12,3.5,frame);
+ box(-58.7,.57,-21.1,1.42,.20,3.37,bedding);
+ box(-58.7,.70,-22.33,1.06,.12,.67,mat(0xa59b80));
+ for(const z of [-22.6,-19.6])box(-58.7,.26,z,1.38,.42,.1,frame);
+ attachContactShadow(world,-58.7,-21.1,.081,1.9,3.9);
 }
 function dressStreet(){
  const masonryA=masonry("#65544a",707,4,2,true),masonryB=masonry("#6b685b",708,4,1),roof=mat(0x383d38),sill=mat(0x55483a),window=mat(0x28363a,.35,.22);
@@ -393,12 +456,19 @@ function dressStreet(){
   return {x,y:.061,z,w:.57+(i%5)*.28,h:.008,d:.22+(i%3)*.11,rot:(i%4)*.11};
  });
  instancedByRegion(stains,mat(0x312e28));
+ const leaves=Array.from({length:48},(_,i)=>({
+  x:-70+(i*23%143),z:(i%2?1:-1)*(8.07+(i%3)*.29),y:.11,w:.26+(i%5)*.06,h:.25+(i%7)*.05,d:1,
+  rot:i*.41,rz:(i%3-.9)*.28
+ }));
+ const weeds=matUnique(0x52563a);weeds.side=THREE.DoubleSide;
+ instancedByRegion(leaves,weeds,new THREE.CircleGeometry(1,3));
 }
 function makeWorld(){
  // Use the material sheet when available and a local procedural texture as fallback.
  const road=detailedMaterial(0,1,27,3,0xc9cac5,.78,.034)??asphalt;
  if(road===asphalt){asphalt.map=gritTexture();asphalt.color.set(0xffffff);}
  road.needsUpdate=true;
+ surfaces.register("asphalt_02",road,55,6,0xc9c5b4,.47);
  // Terrain sits below the road and sidewalk to keep their textures stable.
  box(0,-.039,0,160,.076,140,mat(0x343d36));
  // Asphalt, sidewalk, gutters, and lane paint
@@ -428,7 +498,8 @@ function makeWorld(){
  for(let i=0;i<3;i++)box(-56+i*.8,2.5,-14.1,.1,2.4,.12,mat(0x6a5842));
  box(-47,2.3,-13.65,5.8,3.9,.12,mat(0x343c39,.95),false).visible=false;
  // market
- house({cx:-11,cz:-26,w:26,d:24,frontGap:9,doorX:-11,color:masonry("#625548",229,6,2,true),theme:"market"});
+ const marketWall=surfaces.register("painted_plaster_wall",masonry("#625548",229,6,2,true),5.3,1.3,0x9e927d,.55);
+ house({cx:-11,cz:-26,w:26,d:24,frontGap:9,doorX:-11,color:marketWall,theme:"market"});
  ceilingPanel(-11,-26,25.4,23.4,masonry("#4d5145",213,4,4));
  const marketSign=label("LAST STOP MARKET",19,2.2,"#2d3534","#dfaa6d",78);marketSign.position.set(-11,4.35,-13.56);world.add(marketSign);
  const marketPane=marketWindowMaterial();
@@ -466,9 +537,9 @@ function makeWorld(){
   instanced(packs.length,mat(stockColors[i]),j=>packs[j]);
   instanced(cans.length,mat(stockColors[i],.57,.24),j=>({...cans[j],w:.135,d:.135}),unitCylinder);
  });
- box(-7,.5,-29,1.3,1,1.3,mat(0x6b6049));box(-7,1.03,-29,1.35,.11,1.35,mat(0xa28a5b));
- addLight(-15,3.65,-27,0xffae6a,12,21);
- addLight(-5,4,-21,0xc39159,3.4,15);
+ box(-7,.52,-29,1.3,1,1.3,parcelMaterial());
+ addLight(-15,3.65,-27,0xffbf82,14,21);
+ addLight(-5,4,-21,0xd2dfc7,5.2,15);
  for(let z of [-27,-34]){const fixture=box(-11,4.70,z,2.35,.14,.31,matUnique(0xd4bc8a));fixture.material.emissive=new THREE.Color(0x86562c);fixture.material.emissiveIntensity=.7;}
  // Clinic
  house({cx:45,cz:-26,w:31,d:26,frontGap:10,doorX:44,color:masonry("#747973",331,5,2),theme:"clinic"});
@@ -480,7 +551,8 @@ function makeWorld(){
  const redCross=label("+",2.6,2.3,"#e7ded5","#ab3732",140);redCross.position.set(45,6.45,-12.8);world.add(redCross);
  // Reference-guided interior: grimy off-white upper wall, deep hospital teal belt and gray kick panel.
  // All panels are decorative; collision still uses the original solid house walls.
- const clinicTeal=wornSurface(0x153d46,427,4,1),clinicUpper=wornSurface(0x989b8f,428,4,1);
+ const clinicTeal=wornSurface(0x153d46,427,4,1);
+ const clinicUpper=surfaces.register("painted_plaster_wall",wornSurface(0x989b8f,428,4,1),5.3,1,0xc3ccc0,.54);
  const clinicLower=detailedMaterial(1,0,5,1,0x88877b,.90,.027)??wornSurface(0x676961,429,5,1),trim=mat(0x343a32),door=wornSurface(0x4b6565,430,1,1);
  const medHandle=mat(0x979582,.53,.35);
  for(const [y,h,material] of [[.52,1.0,clinicLower],[2.08,2.15,clinicTeal],[4.09,1.64,clinicUpper]]){
@@ -555,6 +627,14 @@ function makeWorld(){
    box(x,2.0,z-.23,.18,.65,.06,red);
    box(x,2.0,z-.24,.65,.18,.07,red);
  }
+ // Wheeled supply trolley tucked against the back wall, outside the approach to Dr. Vale.
+ const cart=mat(0xb3bdbb,.63,.42);
+ for(const y of [.39,1.3])box(40.6,y,-36.36,1.52,.07,.64,cart);
+ for(const side of [-1,1])for(const depth of [-.26,.26]){
+  box(40.6+side*.70,.81,-36.36+depth,.055,1,.057,cart);
+  const caster=cyl(40.6+side*.70,.17,-36.36+depth,.095,.051,coal);caster.rotation.x=Math.PI/2;
+ }
+ for(const [offset,color] of [[-.42,0xe0dacb],[-.08,0x768880],[.35,0x9f927b]])box(40.6+offset,1.43,-36.36,.24,.20,.32,mat(color));
  for(const x of [36,54]){box(x,1.45,-32.0,.10,1.3,.10,medTrim);
    cyl(x,2.15,-32,.24,.11,medTrim);}
  // Pleated side-ward curtains, clear of the central route.
@@ -772,6 +852,7 @@ function createSurvivor(kind){
  const group=new THREE.Group();
  const torso=new THREE.Group();torso.position.y=1.13;group.add(torso);
  const head=new THREE.Group();head.position.set(0,1.26,-.015);torso.add(head);
+ if(kind==="player")head.scale.set(.94,.97,.95);
  const skin=outfit?.skin??mat(0xaa8065),boot=mat(kind==="vale"?0x77786c:0x392d20),sole=mat(0x242321),edge=mat(0x252d23),straps=mat(0x55624b),metal=mat(0x888374,.56,.5);
  const shaped=humanFeature;
  shaped(jacketShape,top,torso,0,0,0,.439,1,.245);
@@ -808,11 +889,15 @@ function createSurvivor(kind){
   box(0,.669,.722,.39,.022,.025,straps,false,torso);
   box(0,.925,.432,.218,.082,.098,edge,false,torso);
   for(const side of [-1,1]){
+   const collar=box(side*.098,.928,-.172,.132,.13,.052,top,false,torso);
+   collar.rotation.z=side*.43;
    const strap=box(side*.276,.473,-.237,.072,.818,.056,edge,false,torso);strap.rotation.z=side*.10;
    shaped(roundedGear,packCloth,torso,side*.33,.426,.412,.13,.45,.30);
    box(side*.219,.522,.722,.038,.554,.021,straps,false,torso);
    box(side*.22,.685,.738,.067,.075,.024,metal,false,torso);
   }
+  box(0,.449,.729,.375,.020,.015,metal,false,torso);
+  box(-.139,.427,.744,.026,.046,.019,metal,false,torso);
  }else if(kind==="vale"){
   const piping=mat(0x799396),pocket=mat(0xb0b8b3);
   box(0,.41,-.265,.038,.69,.033,pocket,false,torso);
@@ -864,8 +949,9 @@ function humanoid(kind){
  if(kind==="runner"){
   torso.rotation.x=-.30;head.position.z=-.20;group.scale.set(.91,1,.92);
   limbs[0].rotation.z=.25;limbs[2].rotation.z=-.30;
-
  }
+ if(kind==="walker")head.rotation.z=-.09;
+ if(kind==="brute")head.position.y-=.06;
  if(kind==="spitter"){
   const glow=infectedGlow;
   humanFeature(unitSphere,glow,group,0,1.65,-.215,.179,.23,.101);
@@ -873,7 +959,7 @@ function humanoid(kind){
   sphere(0,2.02,-.29,.18,glow,group);
  }
 
- group.userData={limbs,head,torso};
+ group.userData={limbs,head,torso,neckTilt:head.rotation.z};
  return group;
 }
 function createNPC(kind,x,z,angle){
@@ -1009,8 +1095,11 @@ function updateEnemies(dt){
  for(let i=enemies.length-1;i>=0;i--){
   const e=enemies[i];
   if(e.dead){
-   e.death-=dt;e.mesh.rotation.z=Math.min(1.4,e.mesh.rotation.z+dt*2.3);
-   e.mesh.position.y=-Math.max(0,1.7-e.death)*.20;
+   e.death-=dt;
+   const fall=clamp((1.7-e.death)/.64,0,1),landing=1-Math.pow(1-fall,3);
+   e.mesh.rotation.z=landing*1.43;
+   e.mesh.rotation.x=landing*.18;
+   e.mesh.position.y=-landing*.24;
    if(e.death<=0){removeEnemy(e);enemies.splice(i,1);}
    continue;
   }
@@ -1051,12 +1140,16 @@ function updateEnemies(dt){
    const intent=chooseInfectedAction(e.type,newDist);
    if(intent&&!lineBlocked(e.x,e.z,p.x,p.z,.1)){e.attackIntent=intent;e.windup=intent.windup;}
   }
-  e.mesh.position.set(e.x,Math.sin(e.phase)*.025,e.z);
-  animateLimbs(e.mesh,Math.sin(e.phase)*(attacking?.16:.56));
-  const torso=e.mesh.userData.torso;
+  const stride=Math.sin(e.phase),looms=e.type==="brute",runs=e.type==="runner";
+  e.mesh.position.set(e.x,Math.abs(stride)*(runs?.035:.014),e.z);
+  animateLimbs(e.mesh,stride*(attacking?.16:looms?.48:runs?.80:.53));
+  const {torso,head,neckTilt}=e.mesh.userData;
   const windup=e.attackIntent?Math.sin(Math.PI*(1-e.windup/e.attackIntent.windup)):.0;
-  torso.rotation.x=(e.type==="runner"?-.30:0)+windup*(e.type==="brute"?.42:e.type==="spitter"?-.55:.23);
-  e.mesh.userData.head.rotation.x=-windup*.12;
+  const recoil=e.hitFlash/.18;
+  torso.rotation.x=(runs?-.30:0)+windup*(looms?.42:e.type==="spitter"?-.55:.23)+recoil*.24;
+  torso.rotation.z=stride*(looms?.044:.065)-recoil*.12;
+  head.rotation.x=-windup*.12+recoil*.20;
+  head.rotation.z=neckTilt-stride*.027;
   if(windup>0){
    const arms=e.mesh.userData.limbs;
    const reach=e.type==="spitter"?-.28:windup*(e.type==="brute"?1.55:1.02);
@@ -1076,6 +1169,7 @@ function poseSurvivor(moving,sprinting){
  torso.rotation.x=sprinting?-.13:moving?-.035:Math.sin(state.time*1.7)*.012;
  torso.rotation.z=moving?Math.sin(state.time*7)*.015:Math.sin(state.time*1.15)*.008;
  head.rotation.x=sprinting?.08:0;
+ head.rotation.y=clamp(Math.sin(state.angle-playerVisual.rotation.y)*.5,-.25,.25);
  const swing=state.meleeAnim>0?Math.sin(Math.PI*(1-state.meleeAnim/WEAPONS.crowbar.cooldown)):0;
  const recoil=state.pistolAnim>0?Math.sin(Math.PI*(1-state.pistolAnim/.28)):0;
  const stride=Math.sin(gaitPhase)*gaitBlend;
@@ -1256,7 +1350,7 @@ function currentMetrics(){
  geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
  pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,
  pixelRatio:renderer.getPixelRatio(),width:innerWidth,height:innerHeight,
- quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.13",materialSheet:Boolean(materialTile)};
+ quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,build:"reconstruction-v0.13.1",photoAssets:surfaces.status()};
 }
 function updatePerfReadout(){
  if($("perf-panel").hidden)return;
@@ -1271,25 +1365,47 @@ function exportPerformanceReport(){
   metrics:currentMetrics(),framesMs:[...qaFrameMs]};
  const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob);
- const link=document.createElement("a");link.href=url;link.download="ashford-v013-performance.json";
+ const link=document.createElement("a");link.href=url;link.download="ashford-v0131-performance.json";
  document.body.appendChild(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1500);
  toast("LOCAL PERFORMANCE REPORT SAVED");
+}
+function roomAtPlayer(){return ENTRANCES.findIndex(({left,right,back,front})=>state.x>left&&state.x<right&&state.z>back&&state.z<front);}
+function updateSceneGrade(room){
+ const zone=renderTier==="quality"&&sceneGrade?(["safehouse","market","clinic"][room]??"street"):"neutral";
+ if(gradeZone===zone)return;
+ gradeZone=zone;
+ const {exposure,sky,ground}=sceneGrades[zone];
+ renderer.toneMappingExposure=exposure;
+ hemi.color.setHex(sky);hemi.groundColor.setHex(ground);
+}
+function applySurfaceDetail(){
+ const active=renderTier==="quality"&&fineSurfaces&&(renderer.capabilities.isWebGL2||renderer.extensions.has("OES_standard_derivatives"));
+ surfaces.setDetail(active);
+ for(const {material,map,relief} of finishMaterials){
+  const bump=active&&!material.userData.photoSurface?map:null;
+  if(material.bumpMap!==bump){material.bumpMap=bump;material.bumpScale=relief;material.needsUpdate=true;}
+ }
 }
 function applyRenderTier(tier){
  renderTier=tier;
  const preset=graphicsPresets[tier];
  renderer.setPixelRatio(Math.min(devicePixelRatio,preset.pixelRatio));
  renderer.shadowMap.enabled=preset.shadows;
+ const shadowCamera=moon.shadow.camera;
+ const shadowWidth=tier==="balanced"?37:70,shadowHeight=tier==="balanced"?32:60;
+ shadowCamera.left=-shadowWidth;shadowCamera.right=shadowWidth;
+ shadowCamera.bottom=-shadowHeight;shadowCamera.top=shadowHeight;
+ shadowCamera.updateProjectionMatrix();
  const quality=tier==="quality";
  scene.background=tier==="performance"?performanceSky:skyTexture;
  scene.environment=quality?skyTexture:null;
  const anisotropy=quality?Math.min(renderer.capabilities.getMaxAnisotropy(),8):1;
- for(const {material,map,relief} of finishMaterials){
+ for(const {map} of finishMaterials){
   if(map.anisotropy!==anisotropy){map.anisotropy=anisotropy;map.needsUpdate=true;}
-  const bump=quality?map:null;
-  if(material.bumpMap!==bump){material.bumpMap=bump;material.bumpScale=relief;material.needsUpdate=true;}
  }
+ applySurfaceDetail();
+ updateSceneGrade(roomAtPlayer());
  dustParticles.visible=preset.particles;
  updateLightBudget();
  qualityFrames=0;qualitySeconds=0;
@@ -1346,16 +1462,28 @@ function controls(){
  $("start-button").onclick=start;$("pause-button").onclick=pause;$("inventory-button").onclick=showPack;$("perf-button").onclick=togglePerf;$("light-button").onclick=toggleFlashlight;
  $("export-perf").onclick=exportPerformanceReport;
  const volume=$("sound-volume"),motion=$("camera-motion");
+ const fineControl=$("fine-surfaces"),gradeControl=$("scene-grade");
  try{
   const savedVolume=localStorage.getItem("ashfordVolume");
   if(savedVolume!==null)volume.value=savedVolume;
   const savedMotion=localStorage.getItem("ashfordCameraMotion");
   if(savedMotion!==null)cameraMotion=savedMotion==="on";
+  fineSurfaces=localStorage.getItem("ashfordFineSurfaces")!=="off";
+  sceneGrade=localStorage.getItem("ashfordSceneGrade")!=="off";
   const checkpoint=JSON.parse(localStorage.getItem("ashfordRebirthV01")||"null");
   if(Number.isInteger(checkpoint?.stage)&&checkpoint.stage>=0&&checkpoint.stage<stages.length){
    $("start-button").firstChild.textContent="CONTINUE CAMPAIGN ";
   }
  }catch{}
+ fineControl.checked=fineSurfaces;gradeControl.checked=sceneGrade;
+ fineControl.onchange=()=>{
+  fineSurfaces=fineControl.checked;applySurfaceDetail();
+  try{localStorage.setItem("ashfordFineSurfaces",fineSurfaces?"on":"off");}catch{}
+ };
+ gradeControl.onchange=()=>{
+  sceneGrade=gradeControl.checked;updateSceneGrade(roomAtPlayer());
+  try{localStorage.setItem("ashfordSceneGrade",sceneGrade?"on":"off");}catch{}
+ };
  sound.setVolume(Number(volume.value)/100);
  const showMotionSetting=()=>{motion.setAttribute("aria-pressed",String(cameraMotion));motion.textContent=cameraMotion?"CAMERA MOTION ON":"CAMERA MOTION OFF";};
  showMotionSetting();
@@ -1440,7 +1568,8 @@ function installLocalQA(){
      drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
      pointLightsActive:localLights.filter(l=>l.visible).length,pointLightsTotal:localLights.length,pixelRatio:renderer.getPixelRatio(),
      quality:qualityMode,renderTier,shadows:renderer.shadowMap.enabled,materialSheet:Boolean(materialTile),
-     surfaceRelief:finishMaterials.some(({material})=>Boolean(material.bumpMap)),skyReflections:scene.environment===skyTexture};
+     surfaceRelief:finishMaterials.some(({material})=>Boolean(material.bumpMap)),skyReflections:scene.environment===skyTexture,
+     photoAssets:surfaces.status(),marketShelf:Boolean(marketShelf?.visible),sceneGrade:gradeZone};
   },
   noDamage(on){state.qaNoDamage=Boolean(on);},
   combatSetup(type="walker",range=6){
@@ -1492,8 +1621,9 @@ function animate(){
  }
  if(marker){markerRing.rotation.z+=frameDt*.8;markerDiamond.rotation.y+=frameDt*.75;markerDiamond.position.y=2.65+Math.sin(performance.now()*.002)*.11;}
  updateCamera(frameDt);
- sound.ambience(ENTRANCES.some(box=>state.x>box.left&&state.x<box.right&&state.z>box.back&&state.z<box.front),
-  state.started&&!state.paused&&!state.ended&&!document.hidden);
+ const room=roomAtPlayer();
+ updateSceneGrade(room);
+ sound.ambience(room>=0,state.started&&!state.paused&&!state.ended&&!document.hidden);
  lightBudgetElapsed+=frameDt;
  if(lightBudgetElapsed>=.38){updateLightBudget();lightBudgetElapsed=0;}
  renderer.render(scene,camera);
@@ -1507,5 +1637,6 @@ try{
  makeWorld();playerVisual=humanoid("player");playerVisual.position.set(state.x,0,state.z);world.add(playerVisual);playerShadow=attachContactShadow(world,state.x,state.z);
  createNPC("mara",-14,-27,Math.PI);createNPC("vale",48.9,-30.75,Math.PI);createNPC("guard",40.2,-31.1,Math.PI*.85);
  updateLightBudget();spawnAmbient();makeMarker();setMarker();controls();installLocalQA();world.updateMatrixWorld(true);updateCamera(1);animate();
+ void surfaces.loadColors();
  $("loader").classList.add("hide");setTimeout(()=>$("loader").remove(),600);
 }catch(err){$("loader").innerHTML='<h2>ASHFORD COULD NOT LOAD</h2><p style="max-width:420px;text-align:center;padding:12px">Check your WebGL support and internet connection. '+String(err.message).replace(/</g,"&lt;")+"</p>";console.error(err);}
