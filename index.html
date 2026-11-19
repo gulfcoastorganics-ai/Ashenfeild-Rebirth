@@ -46,14 +46,12 @@
 <div class="modal visible" id="intro">
  <div class="intro-backdrop"></div>
  <div class="intro-content">
-  <div class="stamp">CLASSIFIED / RECONSTRUCTION BUILD</div>
-  <div class="slash"></div>
-  <div class="kicker">SEVEN DAYS AFTER THE FALL</div>
+  <p class="kicker">ASHFORD COUNTY · SEVEN DAYS AFTER THE FALL</p>
   <h1>DEAD ZONE <em>:</em><br><span>AFTERMATH</span></h1>
-  <p class="lead">ASHFORD COUNTY IS GONE. YOU ARE NOT.</p>
-  <p class="sublead">Escape the safehouse. Search Last Stop Market. Find the patrol car. Reach Ashford Clinic. Stay alive.</p>
-  <button class="primary big" id="start-button">ENTER ASHFORD <span>↗</span></button>
-  <div class="intro-bottom"><span>THIRD-PERSON SURVIVAL · PROCEDURAL 3D</span><span>ORIGINAL RECREATION — NOT V7.1 SOURCE</span></div>
+  <p class="sublead">Get out of the safehouse, find supplies at Last Stop Market, and reach Ashford Clinic before nightfall.</p>
+  <button class="primary big" id="start-button">ENTER ASHFORD <span aria-hidden="true">↗</span></button>
+  <p id="startup-status" class="startup-status" role="status" hidden></p>
+  <button class="ghost" id="retry-button" type="button" hidden>RELOAD GAME</button>
  </div>
 </div>
 <div class="modal" id="dialogue">
@@ -66,7 +64,15 @@
 </div>
 <div class="modal" id="pause-modal">
  <div class="modal-shade"></div>
- <div class="panel-modal pause-box"><div class="eyebrow">GAME PAUSED</div><h2>STAY SHARP.</h2><p>Your progress saves automatically to this browser.</p><button id="resume" class="primary">RESUME MISSION</button><button id="quality-button" class="ghost">GRAPHICS: AUTO</button><button id="restart" class="ghost">RESTART OPENING ROUTE</button><div class="small-print">Original independent browser prototype. Does not alter the live Sites production game.</div></div>
+ <div class="panel-modal pause-box">
+  <div class="eyebrow">GAME PAUSED</div><h2>Field settings</h2>
+  <button id="resume" class="primary">RESUME MISSION</button>
+  <button id="quality-button" class="ghost">GRAPHICS: AUTO</button>
+  <label class="volume-setting" for="sound-volume">Sound volume<input id="sound-volume" type="range" min="0" max="100" value="65"></label>
+  <button id="camera-motion" class="ghost" type="button" aria-pressed="true">CAMERA MOTION ON</button>
+  <button id="restart" class="ghost" type="button">RESTART OPENING ROUTE</button>
+  <p class="save-note">Progress saves in this browser.</p>
+ </div>
 </div>
 <div class="modal" id="gameover">
  <div class="modal-shade"></div>

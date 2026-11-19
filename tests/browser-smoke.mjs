@@ -5,7 +5,7 @@ import { resolve, extname, sep } from "node:path";
 import assert from "node:assert/strict";
 
 const root=resolve(import.meta.dirname,"..");
-const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".json":"application/json"};
+const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".json":"application/json",".webp":"image/webp"};
 const server=createServer(async(req,res)=>{
  try{
   const name=decodeURIComponent((req.url||"/").split("?")[0]);
@@ -57,6 +57,14 @@ try{
  report("Inventory open / close","PASS");
  await page.keyboard.press("Escape");
  assert(await page.locator("#pause-modal").isVisible(),"Pause menu did not open");
+ await page.locator("#sound-volume").focus();
+ await page.keyboard.press("Home");
+ assert.equal(await page.locator("#sound-volume").inputValue(),"0");
+ const motion=page.locator("#camera-motion");
+ const previousMotion=await motion.getAttribute("aria-pressed");
+ await motion.click();
+ const savedMotion=await motion.getAttribute("aria-pressed");
+ assert.notEqual(savedMotion,previousMotion);
  assert(await page.locator("#quality-button").isVisible(),"Graphics toggle missing");
  const beforeQuality=(await page.locator("#quality-button").innerText()).trim();
  await page.locator("#quality-button").click();
@@ -90,6 +98,9 @@ try{
  assert(saved&&typeof saved.stage==="number","No checkpoint saved when opening pause");
  await page.reload({waitUntil:"domcontentloaded"});
  await page.locator("#loader").waitFor({state:"detached",timeout:45000});
+ assert.match(await page.locator("#start-button").innerText(),/CONTINUE CAMPAIGN/);
+ assert.equal(await motion.getAttribute("aria-pressed"),savedMotion);
+ assert.equal(await page.locator("#sound-volume").inputValue(),"0");
  await page.locator("#start-button").click();
  assert(await page.locator("#hud").isVisible(),"Reloaded game failed to start");
  await assertGraphics("performance",.85);
